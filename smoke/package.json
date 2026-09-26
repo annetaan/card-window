@@ -1,0 +1,25 @@
+{
+  "name": "card-window-smoke",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Installs @annetaan/card-window from the npm registry and checks that it can be imported, bundled and type-checked.",
+  "scripts": {
+    "test": "npm run test:cjs && npm run test:esm && npm run test:bundle && npm run test:types",
+    "test:bundle": "esbuild bundle.tsx --bundle --platform=node --format=esm --main-fields=module,main --external:react --external:react-dom --metafile=dist/meta.json --outfile=dist/bundle.mjs --log-level=warning && node dist/bundle.mjs",
+    "test:cjs": "node require.cjs",
+    "test:esm": "node import.mjs",
+    "test:types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@annetaan/card-window": "latest",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.6.0"
+  }
+}
