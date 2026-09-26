@@ -1,8 +1,10 @@
-// Bundlers pick the ESM build through the `module` field.
+// Bundlers pick the ESM build through the `import` condition of the `exports` field.
 import assert from 'node:assert/strict';
 import * as React from 'react';
 import { renderToString } from 'react-dom/server';
-import { CardProps, CardWindow, range } from '@annetaan/card-window';
+import DefaultCardWindow, { CardProps, CardWindow, range } from '@annetaan/card-window';
+
+assert.equal(DefaultCardWindow, CardWindow);
 
 const Card: React.FC<CardProps> = ({ index, style }) => <div style={style}>{index}</div>;
 

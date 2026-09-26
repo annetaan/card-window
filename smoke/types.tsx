@@ -1,6 +1,6 @@
 // Type-checked only. It uses the public types the way an app would.
 import * as React from 'react';
-import {
+import DefaultCardWindow, {
   CardProps,
   CardWindow,
   CardWindowProps,
@@ -35,3 +35,4 @@ const props: CardWindowProps<Item[]> = {
 };
 
 export const App = () => <CardWindow {...props} />;
+export const DefaultApp = () => <DefaultCardWindow {...props} />;

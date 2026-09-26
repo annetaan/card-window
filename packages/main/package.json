@@ -1,6 +1,6 @@
 {
   "name": "@annetaan/card-window",
-  "version": "1.9.3",
+  "version": "1.10.3",
   "description": "Card window works by only rendering part of a large data set (just enough to fill the viewport). It is very much inspired by Brian Vaughn's react-window.",
   "keywords": [
     "react",
@@ -20,8 +20,21 @@
   "license": "MIT",
   "author": "michiharu",
   "main": "./lib/cjs/index.js",
-  "module": "./lib/esm/index.js",
+  "module": "./lib/esm/index.mjs",
   "types": "./lib/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./lib/esm/index.d.mts",
+        "default": "./lib/esm/index.mjs"
+      },
+      "require": {
+        "types": "./lib/cjs/index.d.ts",
+        "default": "./lib/cjs/index.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "/lib"
   ],
@@ -31,6 +44,8 @@
     "fix": "npm run format && npm run lint && npx sort-package-json",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "lint": "eslint --fix --ext .ts,.tsx ./src",
+    "postbuild": "node scripts/emit-mts-types.cjs",
+    "prebuild": "rm -rf lib",
     "prepack": "npm run build",
     "test": "jest",
     "watch": "rollup -cw"
