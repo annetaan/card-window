@@ -1,7 +1,7 @@
 import React from 'react';
 import clsx from 'clsx';
 import styles from './HomepageFeatures.module.css';
-import { CardWindow, range } from 'card-window';
+import { CardWindow, range } from '@annetaan/card-window';
 
 type FeatureItem = {
   title: string;

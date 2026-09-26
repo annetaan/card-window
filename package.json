@@ -5,14 +5,14 @@
     "packages/**"
   ],
   "scripts": {
-    "build": "yarn workspace card-window build",
+    "build": "yarn workspace @annetaan/card-window build",
     "ci": "yarn fix && yarn test",
-    "coverage": "yarn workspace card-window test --coverage",
+    "coverage": "yarn workspace @annetaan/card-window test --coverage",
     "deploy": "GIT_USER=michiharu yarn workspace website deploy",
-    "fix": "yarn workspace card-window fix",
+    "fix": "yarn workspace @annetaan/card-window fix",
     "start": "yarn workspace website start",
-    "test": "yarn workspace card-window test",
-    "watch": "yarn workspace card-window watch"
+    "test": "yarn workspace @annetaan/card-window test",
+    "watch": "yarn workspace @annetaan/card-window watch"
   },
   "devDependencies": {
     "@types/react": "^17.0.37",

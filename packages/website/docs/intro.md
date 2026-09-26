@@ -7,18 +7,18 @@ sidebar_position: 1
 
 ## Installation
 
-`card-window` is available as an npm package.
+`@annetaan/card-window` is available as an npm package.
 
 ### with npm
 
 ```bash
-npm install card-window
+npm install @annetaan/card-window
 ```
 
 ### with yarn
 
 ```bash
-yarn add card-window
+yarn add @annetaan/card-window
 ```
 
 ## Usage
@@ -27,7 +27,7 @@ yarn add card-window
 import * as React from 'react';
 import ReactDOM from 'react-dom';
 
-import { CardWindow, CardProps, range } from 'card-window';
+import { CardWindow, CardProps, range } from '@annetaan/card-window';
 
 const SampleCard: React.FC<CardProps> = ({ index, style, row, col }) => (
   <div style={style}>

@@ -5,25 +5,25 @@ It is very much inspired by Brian Vaughn's react-window.
 
 ## Installation
 
-card-window is available as an npm package.
+`@annetaan/card-window` is available as an npm package.
 
 ```bash
 // with npm
-npm install card-window
+npm install @annetaan/card-window
 
 // with yarn
-yarn add card-window
+yarn add @annetaan/card-window
 ```
 
 ## Usage
 
-Lean more at [michiharu.github.io/card-window/](https://michiharu.github.io/card-window/?path=/docs/introduction--page)
+Learn more at [annetaan.github.io/card-window/](https://annetaan.github.io/card-window/)
 
 ```typescript
 import * as React from 'react';
 import ReactDOM from 'react-dom';
 
-import { CardWindow, CardProps, range } from 'card-window';
+import { CardWindow, CardProps, range } from '@annetaan/card-window';
 
 const SampleCard: React.FC<CardProps> = ({ index, style, row, col }) => (
   <div style={style}>
