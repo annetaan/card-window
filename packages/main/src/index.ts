@@ -1,6 +1,8 @@
-import { Spacing as _Spacing } from './CardWindow';
+import CardWindow, { Spacing as _Spacing } from './CardWindow';
 
-export { default as CardWindow } from './CardWindow';
+// card-window@1.10.x shipped a default export, so keep it for users who migrate from there.
+export default CardWindow;
+export { CardWindow };
 export {
   CardProps,
   Rect,
