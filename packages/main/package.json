@@ -1,6 +1,6 @@
 {
-  "name": "card-window",
-  "version": "1.9.2",
+  "name": "@annetaan/card-window",
+  "version": "1.9.3",
   "description": "Card window works by only rendering part of a large data set (just enough to fill the viewport). It is very much inspired by Brian Vaughn's react-window.",
   "keywords": [
     "react",
@@ -9,13 +9,13 @@
     "list",
     "grid"
   ],
-  "homepage": "https://github.com/michiharu/card-window",
+  "homepage": "https://github.com/annetaan/card-window",
   "bugs": {
-    "url": "https://github.com/michiharu/card-window/issues"
+    "url": "https://github.com/annetaan/card-window/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/michiharu/card-window.git"
+    "url": "git+https://github.com/annetaan/card-window.git"
   },
   "license": "MIT",
   "author": "michiharu",
@@ -31,7 +31,7 @@
     "fix": "npm run format && npm run lint && npx sort-package-json",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "lint": "eslint --fix --ext .ts,.tsx ./src",
-    "prepack": "yarn build",
+    "prepack": "npm run build",
     "test": "jest",
     "watch": "rollup -cw"
   },
@@ -60,5 +60,8 @@
   "peerDependencies": {
     "react": ">=16.13.0 <19",
     "react-dom": ">=16.13.0 <19"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

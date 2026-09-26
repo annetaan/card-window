@@ -15,7 +15,7 @@ const config = {
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
   favicon: 'img/favicon.ico',
-  organizationName: 'michiharu', // Usually your GitHub org/user name.
+  organizationName: 'annetaan', // Usually your GitHub org/user name.
   projectName: 'card-window', // Usually your repo name.
 
   plugins: [
@@ -62,7 +62,7 @@ const config = {
             label: 'Document',
           },
           {
-            href: 'https://github.com/michiharu/card-window',
+            href: 'https://github.com/annetaan/card-window',
             label: 'GitHub',
             position: 'right',
           },

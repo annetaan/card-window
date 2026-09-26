@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { CardWindow, range } from 'card-window';
+import { CardWindow, range } from '@annetaan/card-window';
 
 const SampleCard = ({ index, style, row, col }) => (
   <div className="card" style={style}>
