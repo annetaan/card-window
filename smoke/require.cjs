@@ -2,7 +2,10 @@
 const assert = require('node:assert/strict');
 const { createElement } = require('react');
 const { renderToString } = require('react-dom/server');
-const { CardWindow, range } = require('@annetaan/card-window');
+const cardWindow = require('@annetaan/card-window');
+
+const { CardWindow, range } = cardWindow;
+assert.equal(cardWindow.default, CardWindow);
 
 // CardWindow is a forwardRef component, so it is an object.
 assert.equal(CardWindow.$$typeof, Symbol.for('react.forward_ref'));

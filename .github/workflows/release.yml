@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # npm Trusted Publishing exchanges the GitHub OIDC token for a publish token.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # Trusted Publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@^11.5.1
+      - name: Check that the tag matches the package version
+        run: |
+          version=$(node -p "require('./packages/main/package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $version"
+            exit 1
+          fi
+      - run: yarn install --frozen-lockfile --ignore-engines
+      - run: yarn test
+      - name: Publish
+        working-directory: packages/main
+        run: npm publish
+
+  smoke:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # A new version can take a few minutes to appear on the registry.
+      - name: Wait for the registry
+        run: |
+          for i in $(seq 1 30); do
+            npm view "@annetaan/card-window@${GITHUB_REF_NAME#v}" version && exit 0
+            sleep 10
+          done
+          exit 1
+      - name: Run the smoke test against the published version
+        working-directory: smoke
+        run: |
+          npm install
+          npm install --no-save "@annetaan/card-window@${GITHUB_REF_NAME#v}"
+          npm test

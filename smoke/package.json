@@ -8,7 +8,8 @@
     "test:bundle": "esbuild bundle.tsx --bundle --platform=node --format=esm --main-fields=module,main --external:react --external:react-dom --metafile=dist/meta.json --outfile=dist/bundle.mjs --log-level=warning && node dist/bundle.mjs",
     "test:cjs": "node require.cjs",
     "test:esm": "node import.mjs",
-    "test:types": "tsc --noEmit"
+    "test:types": "tsc --noEmit",
+    "use:local": "cd ../packages/main && npm pack --pack-destination ../../smoke/dist && cd ../../smoke && npm install --no-save ./dist/annetaan-card-window-*.tgz"
   },
   "dependencies": {
     "@annetaan/card-window": "latest",

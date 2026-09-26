@@ -1,11 +1,11 @@
-// Node has no `exports` field to follow, so `import` loads the CommonJS build.
-// This checks that its named exports are visible to ESM.
+// Node follows the `import` condition of the `exports` field to the ESM build.
 import assert from 'node:assert/strict';
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
-import { CardWindow, range } from '@annetaan/card-window';
+import DefaultCardWindow, { CardWindow, range } from '@annetaan/card-window';
 
 // CardWindow is a forwardRef component, so it is an object.
+assert.equal(DefaultCardWindow, CardWindow);
 assert.equal(CardWindow.$$typeof, Symbol.for('react.forward_ref'));
 assert.deepEqual(range(3), [0, 1, 2]);
 
