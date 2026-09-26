@@ -56,13 +56,13 @@ The rule for this phase is to leave the library source alone. The package that c
 
 ### Steps
 
-1. **pnpm.** Add `pnpm-workspace.yaml` and `packageManager` in the root `package.json`. Delete `yarn.lock`. Turn root scripts into `pnpm --filter`. The website depends on the library with `workspace:*`.
+1. **pnpm.** Add `pnpm-workspace.yaml` and `packageManager` in the root `package.json`. Delete `yarn.lock`. Turn root scripts into `pnpm --filter`. The workspace holds `packages/main` only. `packages/website` stays out until phase 5 replaces it, so the current docs site cannot be redeployed until then. Drop the root `start` and `deploy` scripts that point at it.
 2. **tsdown.** Replace rollup. Emit ESM and CJS with `.d.mts` and `.d.cts`. Keep the `exports` shape from 1.10.3. Delete `rollup.config.js`, `scripts/emit-mts-types.cjs` and the `prebuild` and `postbuild` scripts. Check `npm pack --dry-run` for the file list.
 3. **TypeScript 5.** Update `tsconfig.json`. The current one targets ES5 with `moduleResolution: node`.
 4. **Vitest.** Replace jest and esbuild-jest. Keep jsdom. Move `@testing-library/react` to a version that supports the React used in dev. All 162 tests must pass without changes to what they assert.
-5. **Lint and format.** ESLint 9 flat config with typescript-eslint and react-hooks, Prettier 3. Or Biome. See open questions.
-6. **React.** Move dev React to 18. Decide the peer range. See open questions.
-7. **CI.** Replace `main.yml` with `ci.yml` on pull requests and pushes to `main`. It runs install, lint, typecheck, test, build, `@arethetypeswrong/cli --pack`, and the smoke test with `use:local`. Node 24.
+5. **Lint and format.** oxlint and oxfmt replace ESLint, Prettier and all the airbnb configs. Delete `.eslintrc.js`, `tsconfig.eslint.json` and `.prettierrc.js`. Carry over what oxlint supports from the current rules: react-hooks, the TypeScript rules, `sort-imports` and import order with React first. Keep the format close to today, with print width 120, single quotes and semicolons, so the first format run makes a small diff. Update `.vscode/settings.json`.
+6. **React.** Move dev React to 18. Widen the peer range to include React 19, but only after CI runs the unit tests and the smoke test on React 18 and 19 in a matrix and both pass.
+7. **CI.** Replace `main.yml` with `ci.yml` on pull requests and pushes to `main`. It runs install, lint, format check, typecheck, test, build, `@arethetypeswrong/cli --pack`, and the smoke test with `use:local`. Node 24. Tests and the smoke test run on React 18 and 19.
 8. **Release.** Switch `release.yml` to pnpm. Keep `npm publish` in `packages/main`, because npm 11.5.1 or later is what I verified with Trusted Publishing. Keep the file name.
 9. **Docs in the repo.** Update `CONTRIBUTING.md` for pnpm.
 10. **Release 1.10.4** from a tag to prove the new pipeline end to end.
@@ -98,12 +98,17 @@ These tests must pass on 1.10.x first. Then I know they check behavior, and they
 - Move `intro.md`, `examples.mdx`, `example-utils.mdx` and the API reference that typedoc generates today.
 - Deploy to GitHub Pages at https://annetaan.github.io/card-window/ from Actions.
 
+## Decisions
+
+Decided on 2026-09-27.
+
+- Lint and format: oxlint and oxfmt.
+- Peer range: include React 19, verified in CI on 18 and 19.
+- Website in phase 2: out of the pnpm workspace until phase 5.
+
 ## Open questions
 
-- Lint: ESLint 9 with Prettier 3, or Biome. The current rules are airbnb plus a few overrides, including import order with React first.
-- Peer range: add React 19? I would test it in CI first, with a matrix on React 18 and 19.
-- Website during phase 2: keep Docusaurus building under pnpm, or drop it from the workspace until phase 5. Dropping it means the live docs cannot be redeployed until then.
-- `lastRowAlign: 'right'` is hard to express in CSS Grid. Keep it with some JavaScript, or remove it in 2.0.0.
+- `lastRowAlign: 'right'` is hard to express in CSS Grid. Keep it with some JavaScript, or remove it in 2.0.0. Decide in phase 4.
 
 ## Working conventions
 
