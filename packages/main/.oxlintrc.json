@@ -7,7 +7,10 @@
     "react/rules-of-hooks": "error",
     "react/exhaustive-deps": "warn",
     "react/refs": "warn",
-    "react/function-component-definition": ["error", { "namedComponents": "arrow-function", "unnamedComponents": "arrow-function" }],
+    "react/function-component-definition": [
+      "error",
+      { "namedComponents": "arrow-function", "unnamedComponents": "arrow-function" }
+    ],
     "sort-imports": ["error", { "ignoreDeclarationSort": true }],
     "no-array-constructor": "error",
     "typescript/adjacent-overload-signatures": "error",

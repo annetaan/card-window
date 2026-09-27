@@ -441,7 +441,7 @@ describe('CardWindow', () => {
     render(
       <CardWindow data={data} cardRect={cardRect}>
         {Card}
-      </CardWindow>
+      </CardWindow>,
     );
 
     // screen.debug();

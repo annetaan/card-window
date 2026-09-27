@@ -202,7 +202,7 @@ const getColumns = (
   cardWidth: number,
   spacing: Spacing,
   justifyContent: JustifyContent,
-  maxCols: number | undefined
+  maxCols: number | undefined,
 ): number => {
   const { x, left, right } = spacing;
   const baseWidth = containerWidth - left - right;
@@ -218,14 +218,14 @@ const getColumns = (
 const defaultLoadingCardCount = 10;
 
 const getLoadingCardCount = (loading: Loading | undefined) =>
-  loading?.type === 'card' ? loading.count ?? defaultLoadingCardCount : 0;
+  loading?.type === 'card' ? (loading.count ?? defaultLoadingCardCount) : 0;
 
 const getScrollContainerHeight = (
   cols: number,
   cardCount: number,
   card: Rect,
   spacing: Spacing,
-  loading: Loading | undefined
+  loading: Loading | undefined,
 ): number => {
   if (cols === 0) return 0;
   const { y, top, bottom } = spacing;
@@ -247,7 +247,7 @@ const getRenderLastRow = (
   containerHeight: number,
   overScanPx: number,
   card: Rect,
-  { y }: Spacing
+  { y }: Spacing,
 ): number => Math.floor((offset + containerHeight + overScanPx) / (card.height + y));
 
 const getLastRowFromLength = (length: number, loadingCards: number, cols: number): number => {
@@ -263,12 +263,12 @@ const getRows = (
   overScanPx: number,
   containerHeight: number,
   card: Rect,
-  spacing: Spacing
+  spacing: Spacing,
 ): [number, number] => {
   const first = getRenderFirstRow(offset, overScanPx, card, spacing);
   const last = Math.min(
     getRenderLastRow(offset, containerHeight, overScanPx, card, spacing),
-    getLastRowFromLength(length, loadingCards, cols)
+    getLastRowFromLength(length, loadingCards, cols),
   );
   return [first, last];
 };
@@ -277,7 +277,7 @@ const getRenderContainerStyle = (
   row: number,
   card: Rect,
   spacing: Spacing,
-  justifyContent: JustifyContent
+  justifyContent: JustifyContent,
 ): CSSProperties => {
   const top = row * (card.height + spacing.y) + spacing.top;
   return {
@@ -293,7 +293,7 @@ const getBaseItemProps = (
   cols: number,
   justifyContent: JustifyContent,
   { width, height }: Rect,
-  { x }: Spacing
+  { x }: Spacing,
 ): Omit<CardProps, 'data' | 'index'> => {
   const row = Math.floor(index / cols);
   const col = index % cols;
@@ -315,7 +315,7 @@ const getStop = (
   cols: number,
   lastRowAlign: LastRowAlign,
   length: number,
-  loadingCards: number
+  loadingCards: number,
 ): number => {
   if (lastRowAlign !== 'inherit') return (rows[1] + 1) * cols;
   return Math.min(length + loadingCards, (rows[1] + 1) * cols);
@@ -328,7 +328,7 @@ const getItemTypeAndIndex = (
   loadingCards: number,
   lastRowAlign: LastRowAlign,
   isLastRow: boolean,
-  stop: number
+  stop: number,
 ): { type: ItemType; index?: number } => {
   if (lastRowAlign !== 'right') {
     if (index < length) return { type: 'card', index };
@@ -351,7 +351,7 @@ const getItemProps = (
   card: Rect,
   spacing: Spacing,
   justifyContent: JustifyContent,
-  lastRowAlign: LastRowAlign
+  lastRowAlign: LastRowAlign,
 ): ItemProps[] => {
   if (cols === 0) return [];
   if (length + loadingCards === 0) return [];
@@ -489,7 +489,7 @@ const CardWindow: React.FC<CardWindowProps> = React.forwardRef((props, parentRef
       negativeOverScanPx,
       height,
       card,
-      spacing
+      spacing,
     );
     const visibleItems = getItemProps(
       length,
@@ -499,7 +499,7 @@ const CardWindow: React.FC<CardWindowProps> = React.forwardRef((props, parentRef
       card,
       spacing,
       justify,
-      lastRowAlign
+      lastRowAlign,
     ).filter(isCardTypeProps);
     const onScrollProps: OnScrollProps = {
       direction: scrollDirection,
