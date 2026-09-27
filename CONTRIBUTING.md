@@ -4,12 +4,17 @@
 
 - `pnpm install`: installs the workspace, which holds `packages/main` only.
 - `pnpm build`: builds card-window.
-- `pnpm test`: runs the unit tests with Vitest.
+- `pnpm test`: runs the unit tests with Vitest in jsdom.
+- `pnpm test:browser`: runs the browser tests with Vitest Browser Mode in headless Chromium through Playwright.
 - `pnpm coverage`: runs the unit tests with a coverage report.
 - `pnpm typecheck`: type-checks `src`, test files included, with `tsc`.
 - `pnpm lint`: lints `packages/main` with oxlint.
 - `pnpm format`: formats `packages/main` with oxfmt.
 - `pnpm format:check`: checks the format without writing, as CI does.
+
+Install Chromium once before the first `pnpm test:browser`.
+Run `pnpm --filter @annetaan/card-window exec playwright install --only-shell chromium`.
+To watch the tests in a window, pass `--browser.headless=false`.
 
 `pnpm lint` prints 4 known warnings from the React hooks rules in `CardWindow.tsx`, and they do not fail CI.
 
@@ -45,7 +50,7 @@ npm test
 
 ## React 19
 
-CI runs the unit tests and the smoke test on React 18 from the lockfile, and again on the latest React 19.
+CI runs the unit tests, the browser tests and the smoke test on React 18 from the lockfile, and again on the latest React 19.
 To run them on React 19 locally, work in a scratch copy.
 The switch rewrites `packages/main/package.json` and `pnpm-lock.yaml`, and `git archive` copies only what is committed.
 
@@ -56,6 +61,8 @@ cd /path/to/scratch
 pnpm install --frozen-lockfile
 pnpm --filter @annetaan/card-window add -D react@19 react-dom@19 @types/react@19 @types/react-dom@19
 pnpm test
+pnpm --filter @annetaan/card-window exec playwright install --only-shell chromium
+pnpm test:browser
 cd smoke
 npm install
 npm run use:local -- react@19 react-dom@19 @types/react@19 @types/react-dom@19

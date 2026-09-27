@@ -40,6 +40,11 @@ jobs:
         run: pnpm format:check
       - run: pnpm typecheck
       - run: pnpm test
+      # The browser tests run headless, so the headless shell is enough.
+      # --with-deps installs the system libraries Chromium needs on ubuntu-latest.
+      - name: Install Chromium for the browser tests
+        run: pnpm --filter @annetaan/card-window exec playwright install --with-deps --only-shell chromium
+      - run: pnpm test:browser
       - run: pnpm build
       - name: Check the types of the packed package
         run: pnpm dlx @arethetypeswrong/cli@0.18.5 --pack packages/main
