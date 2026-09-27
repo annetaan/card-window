@@ -46,19 +46,20 @@ The rule for this phase is to leave the library source alone. The package that c
 
 - pnpm 12.6.0 workspace, pinned by `packageManager` in the root `package.json`. It holds `packages/main` only.
 - `pnpm-lock.yaml` was imported from `yarn.lock` with `pnpm import`, so every version is unchanged.
-- `allowBuilds` in `pnpm-workspace.yaml` denies the builds of `esbuild` and `core-js-pure`.
+- `allowBuilds` in `pnpm-workspace.yaml` denies the build of `core-js-pure`. `esbuild` left the lockfile with esbuild-jest, so step 4 took it out of `allowBuilds`. `core-js-pure` stays through `eslint-plugin-jsx-a11y`, `aria-query@4` and `@babel/runtime-corejs3`. It goes in step 5.
 - The pnpm 10 that mise installs locally cannot switch itself to 12. mise older than 2026.9.x cannot install pnpm 12 either, because its aqua registry expects the old asset name `pnpm-macos-arm64` and pnpm 12 ships `pnpm-darwin-arm64.tar.gz`. Upgrade mise first (`brew upgrade mise` for a Homebrew install, which cannot run `mise self-update`), then run `mise upgrade pnpm` and open a new shell. `npx -y pnpm@12.6.0` remains the fallback.
-- `packages/main`: tsdown 0.23 (rolldown), TypeScript 5.9.3, jest 27 with esbuild-jest, ESLint 8 with airbnb and `.eslintrc.js`, Prettier 2. tsdown does not type-check. `pnpm typecheck` runs `tsc --noEmit` on `src`, and CI runs it too. Nothing type-checks the test files.
+- `packages/main`: tsdown 0.23 (rolldown), TypeScript 5.9.3, Vitest 5 with jsdom 29, ESLint 8 with airbnb and `.eslintrc.js`, Prettier 2. tsdown does not type-check. `pnpm typecheck` runs `tsc --noEmit` on `src`, test files included, and CI runs it too.
 - `packages/main/tsconfig.json` sets `target` and the ES part of `lib` to ES2019 to match tsdown's target. They only affect type checking. It uses `moduleResolution: bundler`, `jsx: react` and `isolatedModules`. It sets `noEmit`, so tsdown writes all the output. With `isolatedModules`, a type re-export without `export type` makes `pnpm typecheck` fail with TS1205.
 - ESLint's @typescript-eslint 5.17.0 officially supports TypeScript below 4.7.0. So a run in a terminal prints an unsupported-version warning. CI does not print it. The findings are the same as before the update. Step 5 removes ESLint.
 - `packages/main/tsdown.config.mts` sets the build output. It writes four files: `lib/esm/index.mjs`, `lib/esm/index.d.mts`, `lib/cjs/index.js` and `lib/cjs/index.d.ts`. Each format gets one type file. The target is ES2019. The syntax target comes from the tsdown config, not from `tsconfig.json`.
+- `packages/main/vitest.config.mts` only sets the jsdom environment. `globals` is off, so the tests import `describe`, `test` and `expect` from `vitest`. `test` is `vitest run`. `coverage` is `vitest run --coverage` with `@vitest/coverage-v8`.
 - `main`, `module` and `exports` are the same as in 1.10.3. `types` points at `./lib/cjs/index.d.ts`.
-- tsdown needs Node `^22.18.0 || ^24.11.0 || >=26.0.0`.
+- tsdown needs Node `^22.18.0 || ^24.11.0 || >=26.0.0`. Vitest 5 asks for `^22.12.0 || ^24.0.0 || >=26.0.0` and jsdom 29 asks for less, so tsdown still sets the Node floor. jsdom 30 would need `^22.22.2 || ^24.15.0 || >=26.0.0`.
 - `packages/website`: Docusaurus 2.0.0-beta.18. It is replaced in phase 5.
 - `smoke/`: a standalone npm package outside the pnpm workspace. `npm run use:local` clears `smoke/dist`, packs `packages/main` into it and installs the tarball.
 - `.github/workflows/ci.yml` runs on pull requests and pushes to `main`, on Node 24 with pnpm from `pnpm/action-setup@v6.1.0`. It runs lint, typecheck, test, build, arethetypeswrong and the smoke test against the packed tarball. It replaced `main.yml`, which failed on every PR: first on the retired cache service behind `actions/setup-node@v2`, and after step 1 because its `cache: yarn` ran `yarn cache dir`, which rejects `packageManager: pnpm@12.6.0`.
 - `.github/workflows/release.yml` installs and tests with pnpm through `pnpm/action-setup@v6.1.0`. The moving `v6` tag predates pnpm 12 support. It still publishes with `npm publish` in `packages/main`. It is untested until the 1.11.0 tag.
-- Dev dependencies use React 17. The smoke test uses React 18. The peer range is `>=16.13.0 <19`.
+- Dev dependencies use React 17. `@testing-library/react` is 12.1.5, the last version for React 17, with the peer `react <18`. Step 6 moves it to a version for React 18. The smoke test uses React 18. The peer range is `>=16.13.0 <19`.
 
 ### Steps
 
@@ -83,13 +84,17 @@ Step 7 ran right after step 1, ahead of step 2, because `main.yml` failed on eve
 4. **Vitest.** Replace jest and esbuild-jest. Keep jsdom. Move `@testing-library/react` to a version that supports the React used in dev. All 162 tests must pass without changes to what they assert.
    Type-check the test files as well, and have the typecheck step in `ci.yml` cover them.
    With the test files included, the type check reports one TS2304 on `global` in `CardWindow.test.tsx`. It predates step 3, and step 4 fixes it.
+   Done. Vitest is 5.0.2 with vite 8.3.1 and jsdom 29.1.1. `pnpm test` reports 2 test files and 162 tests passed. The test files changed in three ways only. They import from `vitest`, the unused `@testing-library/jest-dom` import is gone, and `global` became `globalThis`. No assertion changed.
+   jsdom 30.1.1 also passed all 162 tests on my Node 24.14.0. Its engines range sits above the Node floor that tsdown sets, so I stayed on 29. `@testing-library/jest-dom` was removed. No test used its matchers, and v5 assumes jest's types from `@types/jest`. `vite` is a devDependency because vitest 5 lists it as a peer that is not optional. `@testing-library/react` went from 12.1.4 to 12.1.5. `pnpm coverage` reports 80.12% of statements and 84.44% of lines.
+   The test patterns left `exclude` in `tsconfig.json`. `pnpm typecheck` now checks the 2 test files and fails with TS2304 if `global` comes back. `ci.yml` did not change, because its typecheck step already runs `pnpm typecheck`.
+   `lib/` is byte-identical to #67, and `npm pack` still lists 6 files. `pnpm install --frozen-lockfile` and `pnpm peers check` are clean. The lockfile went from 718 `packages` entries to 395, with 408 removed and 85 added. Of the 310 snapshots that stayed, only `supports-color@8.1.1` changed. It gained `optional: true`. No package that stayed changed its version. Most names on both sides, such as `jsdom`, `parse5` and `@babel/parser`, are old versions that only jest used, replaced by new ones. The `pnpm test`, `pnpm coverage` and `pnpm typecheck` lines in `CONTRIBUTING.md` were updated in this step.
 5. **Lint and format.** oxlint and oxfmt replace ESLint, Prettier and all the airbnb configs. Delete `.eslintrc.js`, `tsconfig.eslint.json` and `.prettierrc.js`. Carry over what oxlint supports from the current rules: react-hooks, the TypeScript rules, `sort-imports` and import order with React first. Keep the format close to today, with print width 120, single quotes and semicolons, so the first format run makes a small diff. Update `.vscode/settings.json`.
    In `ci.yml`, move the lint step to oxlint and add the format check.
 6. **React.** Move dev React to 18. Widen the peer range to include React 19, but only after CI runs the unit tests and the smoke test on React 18 and 19 in a matrix and both pass.
    The matrix goes in `ci.yml`.
 7. **CI.** Done, ahead of step 2. `ci.yml` replaced `main.yml`. It runs on pull requests and pushes to `main` with Node 24, and runs install, lint, test, build, `@arethetypeswrong/cli --pack` and the smoke test with `use:local`, on the tooling that exists today. `use:local` now creates `smoke/dist` itself, so it works on a fresh checkout and `npm test` no longer quietly tests `latest` from the registry after it fails. CI does not check where the installed package came from, since a failed step already stops the job. Later steps extend `ci.yml`: typecheck in step 2, test files in that typecheck in step 4, oxlint and the format check in step 5, the React 18 and 19 matrix in step 6.
 8. **Release.** Done in step 1. `release.yml` installs and tests with pnpm. It keeps `npm publish` in `packages/main`, because npm 11.5.1 or later is what I verified with Trusted Publishing. It keeps the file name. The 1.11.0 release in step 10 verifies it.
-9. **Docs in the repo.** Add the commands from steps 4 and 5 to `CONTRIBUTING.md`, for test, lint and format. The pnpm basics landed in step 1.
+9. **Docs in the repo.** Add the commands from steps 4 and 5 to `CONTRIBUTING.md`, for test, lint and format. The pnpm basics landed in step 1. The test, coverage and typecheck lines landed in step 4. Lint and format remain for step 5.
 10. **Release 1.11.0** from a tag to prove the new pipeline end to end. It is a minor release, because the syntax floor rises to ES2019 and consumers need TypeScript 4.5 or later. Bump `version` in `packages/main/package.json` in this step.
 
 ### Done when
@@ -141,6 +146,10 @@ Decided on 2026-09-27.
 - TypeScript stays at 4.6.3 in step 2. Step 3 clears tsdown's peer warning.
 - TypeScript moves to 5.9.3 in step 3. 6.0 and 7.0 come after step 5 removes ESLint.
 - `isolatedModules` yes, `verbatimModuleSyntax` no. The latter needs the type-only imports in `src` rewritten.
+- Test runner: Vitest 5 with jsdom 29. jsdom 30 would lift the Node floor above tsdown's.
+- Tests import from `vitest` explicitly. `globals` stays off.
+- `@testing-library/jest-dom` is removed. No test uses its matchers.
+- The `coverage` script stays, on `@vitest/coverage-v8`.
 - The next release is 1.11.0, not 1.10.4, because the syntax floor and the TypeScript floor both rise.
 
 ## Open questions
