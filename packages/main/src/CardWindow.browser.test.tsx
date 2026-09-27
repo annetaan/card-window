@@ -57,6 +57,13 @@ const columnCount = (scroller: HTMLElement) => {
   return all.filter((c) => Math.abs(c.rect.top - all[0].rect.top) < 1).length;
 };
 
+const indexesInView = (scroller: HTMLElement) => {
+  const view = scroller.getBoundingClientRect();
+  return cards(scroller)
+    .filter((c) => c.rect.bottom > view.top && c.rect.top < view.bottom)
+    .map((c) => c.index);
+};
+
 describe('columns', () => {
   test.each([
     [180, 1],
@@ -106,5 +113,22 @@ describe('last row', () => {
       expect(all[i].rect.width).toBeCloseTo(all[i - 3].rect.width, 0);
       expect(all[i].rect.top).toBeGreaterThan(all[i - 3].rect.top);
     }
+  });
+});
+
+describe('scroll offset', () => {
+  // The view is [1108, 1438] in content coordinates. Row 10 [1088, 1188] and
+  // row 13 [1412, 1512] are partly in; row 9 ends at 1080 and row 14 starts at
+  // 1520, so every edge has at least 26px of margin. Rows 10 to 13 are visible,
+  // cards 30 to 41. Cards 0 and 299 are more than 1000px away, so any overscan
+  // the rewrite picks leaves them out.
+  test('renders the cards in view, and not the far ones, after a scroll', async () => {
+    const { scroller } = await renderCardWindow(400, 330, { data: range(300) });
+    await expect.poll(() => columnCount(scroller)).toBe(3);
+    scroller.scrollTop = 1108;
+    await expect.poll(() => indexesInView(scroller)).toEqual(range(30, 42));
+    const rendered = cards(scroller).map((c) => c.index);
+    expect(rendered).not.toContain(0);
+    expect(rendered).not.toContain(299);
   });
 });
