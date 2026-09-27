@@ -11,6 +11,7 @@
     "format:check": "pnpm --filter @annetaan/card-window format:check",
     "lint": "pnpm --filter @annetaan/card-window lint",
     "test": "pnpm --filter @annetaan/card-window test",
+    "test:browser": "pnpm --filter @annetaan/card-window test:browser",
     "typecheck": "pnpm --filter @annetaan/card-window typecheck",
     "watch": "pnpm --filter @annetaan/card-window watch"
   }

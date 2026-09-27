@@ -40,13 +40,14 @@
   ],
   "scripts": {
     "build": "tsdown",
-    "coverage": "vitest run --coverage",
+    "coverage": "vitest run --project unit --coverage",
     "fix": "oxlint --fix && oxfmt && npx sort-package-json",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "oxlint",
     "prepack": "npm run build",
-    "test": "vitest run",
+    "test": "vitest run --project unit",
+    "test:browser": "vitest run --project browser",
     "typecheck": "tsc --noEmit",
     "watch": "tsdown --watch"
   },
@@ -55,16 +56,19 @@
     "@testing-library/react": "^16.3.3",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
+    "@vitest/browser-playwright": "^5.0.2",
     "@vitest/coverage-v8": "^5.0.2",
     "jsdom": "^29.1.1",
     "oxfmt": "^0.70.0",
     "oxlint": "^1.85.0",
+    "playwright": "^1.63.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tsdown": "^0.23.0",
     "typescript": "^5.9.3",
     "vite": "^8.3.1",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.2",
+    "vitest-browser-react": "^2.3.0"
   },
   "peerDependencies": {
     "react": ">=16.13.0 <20",
