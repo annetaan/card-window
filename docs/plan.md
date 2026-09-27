@@ -127,7 +127,7 @@ Step 7 ran right after step 1, ahead of step 2, because `main.yml` failed on eve
 
 All three hold. The last one held when the smoke job of run 36319590312 passed against the published 1.11.0.
 
-PRs: #64 pnpm, #65 CI, #66 tsdown, #67 TypeScript 5, #68 Vitest, #69 oxlint and oxfmt, #70 React, #71 version 1.11.0 and the READMEs, and this PR for the release record.
+PRs: #64 pnpm, #65 CI, #66 tsdown, #67 TypeScript 5, #68 Vitest, #69 oxlint and oxfmt, #70 React, #71 version 1.11.0 and the READMEs, #72 release record.
 
 ## Phase 3. Browser tests before the rewrite
 
