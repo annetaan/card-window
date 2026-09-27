@@ -51,11 +51,16 @@
     "watch": "tsdown --watch"
   },
   "devDependencies": {
-    "@testing-library/react": "^12.1.5",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
     "@vitest/coverage-v8": "^5.0.2",
     "jsdom": "^29.1.1",
     "oxfmt": "^0.70.0",
     "oxlint": "^1.85.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "tsdown": "^0.23.0",
     "typescript": "^5.9.3",
     "vite": "^8.3.1",
