@@ -5,6 +5,7 @@
 - `pnpm install`: installs the workspace, which holds `packages/main` only.
 - `pnpm build`: builds card-window.
 - `pnpm test`: runs the unit tests.
+- `pnpm typecheck`: type-checks `src` with `tsc`.
 
 `packageManager` in the root `package.json` pins pnpm 12.6.0.
 pnpm 10 cannot switch itself to 12 and fails with `Unknown system error -8`.

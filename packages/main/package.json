@@ -48,6 +48,7 @@
     "prebuild": "rm -rf lib",
     "prepack": "npm run build",
     "test": "jest",
+    "typecheck": "tsc --noEmit",
     "watch": "rollup -cw"
   },
   "devDependencies": {
