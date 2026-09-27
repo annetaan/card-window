@@ -53,11 +53,10 @@ jobs:
       # React 19 has to go into the same install as the tarball. A second `npm install --no-save`
       # puts `latest` from the registry back in place of the tarball, and the smoke test still passes.
       # npm appends these arguments to the install that ends `use:local`.
-      # --legacy-peer-deps is needed only while the peer range stops below 19.
       - name: Install the packed tarball with React 19
         if: matrix.react == '19'
         working-directory: smoke
-        run: npm run use:local -- react@19 react-dom@19 @types/react@19 @types/react-dom@19 --legacy-peer-deps
+        run: npm run use:local -- react@19 react-dom@19 @types/react@19 @types/react-dom@19
       - name: Run the smoke test against the packed tarball
         working-directory: smoke
         run: npm test
