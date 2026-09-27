@@ -1,6 +1,7 @@
 node_modules
 lib
 coverage
+.vitest
 
 .DS_Store
 
