@@ -3,4 +3,3 @@ packages:
 
 allowBuilds:
   core-js-pure: false
-  esbuild: false

@@ -5,6 +5,7 @@ import {
   render,
   // screen
 } from '@testing-library/react';
+import { describe, expect, test } from 'vitest';
 
 import CardWindow, {
   CardProps,
@@ -16,8 +17,6 @@ import CardWindow, {
   functions,
   range,
 } from './CardWindow';
-
-import '@testing-library/jest-dom';
 
 const {
   getColumns,
@@ -411,7 +410,7 @@ describe('getNextOffset', () =>
 
 let instanceResize: ResizeObserver | null = null;
 let callbackResize: ResizeObserverCallback | null = null;
-global.ResizeObserver = class MockResizeObjerver {
+globalThis.ResizeObserver = class MockResizeObjerver {
   constructor(callback: ResizeObserverCallback) {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     instanceResize = this;

@@ -40,23 +40,20 @@
   ],
   "scripts": {
     "build": "tsdown",
-    "coverage": "jest --coverage",
+    "coverage": "vitest run --coverage",
     "fix": "npm run format && npm run lint && npx sort-package-json",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "lint": "eslint --fix --ext .ts,.tsx ./src",
     "prepack": "npm run build",
-    "test": "jest",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "watch": "tsdown --watch"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^5.16.1",
-    "@testing-library/react": "^12.1.2",
-    "@types/jest": "^27.0.3",
+    "@testing-library/react": "^12.1.5",
     "@typescript-eslint/eslint-plugin": "^5.8.1",
     "@typescript-eslint/parser": "^5.8.1",
-    "esbuild": "^0.14.9",
-    "esbuild-jest": "^0.5.0",
+    "@vitest/coverage-v8": "^5.0.2",
     "eslint": "^8.6.0",
     "eslint-config-airbnb": "^19.0.2",
     "eslint-config-airbnb-typescript": "^16.1.0",
@@ -65,10 +62,12 @@
     "eslint-plugin-import": "^2.25.3",
     "eslint-plugin-jsx-a11y": "^6.5.1",
     "eslint-plugin-react": "^7.28.0",
-    "jest": "^27.4.5",
+    "jsdom": "^29.1.1",
     "prettier": "^2.5.1",
     "tsdown": "^0.23.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
   },
   "peerDependencies": {
     "react": ">=16.13.0 <19",
