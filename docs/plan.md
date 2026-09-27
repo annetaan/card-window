@@ -48,8 +48,9 @@ The rule for this phase is to leave the library source alone. The package that c
 - `pnpm-lock.yaml` was imported from `yarn.lock` with `pnpm import`, so every version is unchanged.
 - `allowBuilds` in `pnpm-workspace.yaml` denies the builds of `esbuild` and `core-js-pure`.
 - The pnpm 10 that mise installs locally cannot switch itself to 12. mise older than 2026.9.x cannot install pnpm 12 either, because its aqua registry expects the old asset name `pnpm-macos-arm64` and pnpm 12 ships `pnpm-darwin-arm64.tar.gz`. Upgrade mise first (`brew upgrade mise` for a Homebrew install, which cannot run `mise self-update`), then run `mise upgrade pnpm` and open a new shell. `npx -y pnpm@12.6.0` remains the fallback.
-- `packages/main`: tsdown 0.23 (rolldown), TypeScript 4.6, jest 27 with esbuild-jest, ESLint 8 with airbnb and `.eslintrc.js`, Prettier 2. tsdown does not type-check. `pnpm typecheck` runs `tsc --noEmit` on `src`, and CI runs it too. Nothing type-checks the test files.
-- TypeScript stays at 4.6 until step 3. tsdown's peer range starts at TypeScript 5, so `pnpm add` prints a peer warning. Step 3 clears it.
+- `packages/main`: tsdown 0.23 (rolldown), TypeScript 5.9.3, jest 27 with esbuild-jest, ESLint 8 with airbnb and `.eslintrc.js`, Prettier 2. tsdown does not type-check. `pnpm typecheck` runs `tsc --noEmit` on `src`, and CI runs it too. Nothing type-checks the test files.
+- `packages/main/tsconfig.json` sets `target` and the ES part of `lib` to ES2019 to match tsdown's target. They only affect type checking. It uses `moduleResolution: bundler`, `jsx: react` and `isolatedModules`. It sets `noEmit`, so tsdown writes all the output. With `isolatedModules`, a type re-export without `export type` makes `pnpm typecheck` fail with TS1205.
+- ESLint's @typescript-eslint 5.17.0 officially supports TypeScript below 4.7.0. So a run in a terminal prints an unsupported-version warning. CI does not print it. The findings are the same as before the update. Step 5 removes ESLint.
 - `packages/main/tsdown.config.mts` sets the build output. It writes four files: `lib/esm/index.mjs`, `lib/esm/index.d.mts`, `lib/cjs/index.js` and `lib/cjs/index.d.ts`. Each format gets one type file. The target is ES2019. The syntax target comes from the tsdown config, not from `tsconfig.json`.
 - `main`, `module` and `exports` are the same as in 1.10.3. `types` points at `./lib/cjs/index.d.ts`.
 - tsdown needs Node `^22.18.0 || ^24.11.0 || >=26.0.0`.
@@ -76,8 +77,12 @@ Step 7 ran right after step 1, ahead of step 2, because `main.yml` failed on eve
    - The type files use `export { type X }`, so consumers need TypeScript 4.5 or later.
 3. **TypeScript 5.** Update `tsconfig.json`. The current one targets ES5 with `moduleResolution: node`.
    TypeScript 5 removes tsdown's peer warning. tsdown sets the syntax target, so `target` in `tsconfig.json` only affects type checking. Keep `jsx: react`, the classic runtime. The automatic runtime imports `react/jsx-runtime`, and React 16.13 does not have it. Consider `isolatedModules` or `verbatimModuleSyntax`, so typecheck catches the type re-export problem from step 2.
+   Done. TypeScript is 5.9.3, the last 5.x. It is inside the peer ranges of tsdown and rolldown-plugin-dts, and `pnpm peers check` passes. 6.0 and 7.0 wait until after step 5. 6.0 turns `strict` on by default, and type checking `src` then reports 1 error. `verbatimModuleSyntax` was not adopted. It reports TS1484 4 times in `CardWindow.tsx` and `index.ts`, and fixing them needs source changes. Phase 2 leaves the source alone. `isolatedModules` is on instead. Turning `export type {` back into `export {` in `src/index.ts` makes `pnpm typecheck` fail with 12 TS1205. `outDir` and `declaration` were rollup leftovers and are gone.
+   The JS output is byte-identical to #66. The type files went from 7.59 kB to 7.49 kB, with two differences only. `declare type` became `type`, and `React.RefObject<T>` became `RefObject<T>` with `RefObject` added to the named import. The tsconfig change alone does not change the output. All the differences come from the TypeScript update.
+   For consumers, TypeScript 4.4.4 fails with the same error as on #66. 4.5.5 and 5.9.3 pass. arethetypeswrong and the smoke test pass. In the lockfile only `typescript` changed, from 4.6.3 to 5.9.3, plus the entries that depend on it and were re-keyed.
 4. **Vitest.** Replace jest and esbuild-jest. Keep jsdom. Move `@testing-library/react` to a version that supports the React used in dev. All 162 tests must pass without changes to what they assert.
    Type-check the test files as well, and have the typecheck step in `ci.yml` cover them.
+   With the test files included, the type check reports one TS2304 on `global` in `CardWindow.test.tsx`. It predates step 3, and step 4 fixes it.
 5. **Lint and format.** oxlint and oxfmt replace ESLint, Prettier and all the airbnb configs. Delete `.eslintrc.js`, `tsconfig.eslint.json` and `.prettierrc.js`. Carry over what oxlint supports from the current rules: react-hooks, the TypeScript rules, `sort-imports` and import order with React first. Keep the format close to today, with print width 120, single quotes and semicolons, so the first format run makes a small diff. Update `.vscode/settings.json`.
    In `ci.yml`, move the lint step to oxlint and add the format check.
 6. **React.** Move dev React to 18. Widen the peer range to include React 19, but only after CI runs the unit tests and the smoke test on React 18 and 19 in a matrix and both pass.
@@ -134,6 +139,8 @@ Decided on 2026-09-27.
 - tsdown targets ES2019. tsdown cannot emit ES5.
 - CJS types are `.d.ts` beside the `.js`. With `.d.cts`, consumers on TypeScript 4.5 and 4.6 would not see the types.
 - TypeScript stays at 4.6.3 in step 2. Step 3 clears tsdown's peer warning.
+- TypeScript moves to 5.9.3 in step 3. 6.0 and 7.0 come after step 5 removes ESLint.
+- `isolatedModules` yes, `verbatimModuleSyntax` no. The latter needs the type-only imports in `src` rewritten.
 - The next release is 1.11.0, not 1.10.4, because the syntax floor and the TypeScript floor both rise.
 
 ## Open questions
