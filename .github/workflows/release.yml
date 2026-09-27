@@ -22,6 +22,8 @@ jobs:
           registry-url: https://registry.npmjs.org
       # Trusted Publishing needs npm 11.5.1 or later.
       - run: npm install -g npm@^11.5.1
+      # The moving v6 tag predates pnpm 12 support, which came in v6.1.0.
+      - uses: pnpm/action-setup@v6.1.0
       - name: Check that the tag matches the package version
         run: |
           version=$(node -p "require('./packages/main/package.json').version")
@@ -29,8 +31,8 @@ jobs:
             echo "Tag $GITHUB_REF_NAME does not match package version $version"
             exit 1
           fi
-      - run: yarn install --frozen-lockfile --ignore-engines
-      - run: yarn test
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
       - name: Publish
         working-directory: packages/main
         run: npm publish
