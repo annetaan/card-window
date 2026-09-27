@@ -1,7 +1,0 @@
-{
-  "eslint.workingDirectories": [
-    "./packages/main",
-    "./packages/website"
-  ],
-  "editor.defaultFormatter": "esbenp.prettier-vscode"
-}

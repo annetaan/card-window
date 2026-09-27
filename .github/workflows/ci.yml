@@ -25,9 +25,10 @@ jobs:
       # The moving v6 tag predates pnpm 12 support, which came in v6.1.0.
       - uses: pnpm/action-setup@v6.1.0
       - run: pnpm install --frozen-lockfile
-      # The lint script runs with --fix, which would hide errors here. Step 5 replaces ESLint.
       - name: Lint
-        run: pnpm --filter @annetaan/card-window exec eslint --ext .ts,.tsx ./src
+        run: pnpm lint
+      - name: Check formatting
+        run: pnpm format:check
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build

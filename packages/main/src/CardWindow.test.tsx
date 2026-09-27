@@ -1,4 +1,3 @@
-/* eslint-disable class-methods-use-this */
 import * as React from 'react';
 
 import {
@@ -408,22 +407,23 @@ describe('getNextOffset', () =>
     });
   }));
 
+// oxlint-disable-next-line no-unused-vars
 let instanceResize: ResizeObserver | null = null;
+// oxlint-disable-next-line no-unused-vars
 let callbackResize: ResizeObserverCallback | null = null;
 globalThis.ResizeObserver = class MockResizeObjerver {
   constructor(callback: ResizeObserverCallback) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    // oxlint-disable-next-line typescript/no-this-alias
     instanceResize = this;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     callbackResize = callback;
   }
 
   disconnect() {}
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // oxlint-disable-next-line no-unused-vars
   observe(target: Element, options?: ResizeObserverOptions) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // oxlint-disable-next-line no-unused-vars
   unobserve(target: Element) {}
 };
 
@@ -441,7 +441,7 @@ describe('CardWindow', () => {
     render(
       <CardWindow data={data} cardRect={cardRect}>
         {Card}
-      </CardWindow>
+      </CardWindow>,
     );
 
     // screen.debug();

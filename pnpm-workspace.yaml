@@ -1,5 +1,2 @@
 packages:
   - packages/main
-
-allowBuilds:
-  core-js-pure: false

@@ -7,6 +7,9 @@
     "ci": "pnpm run fix && pnpm run test",
     "coverage": "pnpm --filter @annetaan/card-window test --coverage",
     "fix": "pnpm --filter @annetaan/card-window fix",
+    "format": "pnpm --filter @annetaan/card-window format",
+    "format:check": "pnpm --filter @annetaan/card-window format:check",
+    "lint": "pnpm --filter @annetaan/card-window lint",
     "test": "pnpm --filter @annetaan/card-window test",
     "typecheck": "pnpm --filter @annetaan/card-window typecheck",
     "watch": "pnpm --filter @annetaan/card-window watch"
