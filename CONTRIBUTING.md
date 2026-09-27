@@ -7,6 +7,11 @@
 - `pnpm test`: runs the unit tests with Vitest.
 - `pnpm coverage`: runs the unit tests with a coverage report.
 - `pnpm typecheck`: type-checks `src`, test files included, with `tsc`.
+- `pnpm lint`: lints `packages/main` with oxlint.
+- `pnpm format`: formats `packages/main` with oxfmt.
+- `pnpm format:check`: checks the format without writing, as CI does.
+
+`pnpm lint` prints 4 known warnings from the React hooks rules in `CardWindow.tsx`, and they do not fail CI.
 
 `packageManager` in the root `package.json` pins pnpm 12.6.0.
 pnpm 10 cannot switch itself to 12 and fails with `Unknown system error -8`.
