@@ -40,7 +40,7 @@
   ],
   "scripts": {
     "build": "rollup -c",
-    "coverage": "yarn test  --coverage",
+    "coverage": "jest --coverage",
     "fix": "npm run format && npm run lint && npx sort-package-json",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "lint": "eslint --fix --ext .ts,.tsx ./src",
@@ -70,6 +70,7 @@
     "prettier": "^2.5.1",
     "rollup": "^2.61.1",
     "rollup-plugin-typescript2": "^0.31.1",
+    "tslib": "^2.3.1",
     "typescript": "^4.5.3"
   },
   "peerDependencies": {
