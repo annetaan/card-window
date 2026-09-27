@@ -3,7 +3,7 @@ import * as React from 'react';
 import { describe, expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
 
-import { CardProps, CardWindow, CardWindowProps, range } from '.';
+import { CardProps, CardWindow, CardWindowProps, JustifyContent, range } from '.';
 
 // These tests pin down what a user sees, so that the layout can be rewritten
 // underneath them. They import only from the public entry, and they read only
@@ -79,5 +79,32 @@ describe('columns', () => {
     await expect.poll(() => columnCount(scroller)).toBe(3);
     frame.style.width = '600px';
     await expect.poll(() => columnCount(scroller)).toBe(5);
+  });
+});
+
+describe('last row', () => {
+  const justifyContents: JustifyContent[] = [
+    'left',
+    'right',
+    'center',
+    'space-around',
+    'space-between',
+    'space-evenly',
+    'stretch',
+  ];
+
+  // 8 cards in 3 columns leave 2 cards on the last row, and they must sit under
+  // columns 0 and 1 of the row above. The width check covers stretch, where the
+  // cards grow.
+  test.each(justifyContents)('lines up with the columns above when justifyContent is %s', async (justifyContent) => {
+    const { scroller } = await renderCardWindow(400, 400, { data: range(8), justifyContent });
+    await expect.poll(() => cards(scroller).length).toBe(8);
+    expect(columnCount(scroller)).toBe(3);
+    const all = cards(scroller);
+    for (const i of [6, 7]) {
+      expect(all[i].rect.left).toBeCloseTo(all[i - 3].rect.left, 0);
+      expect(all[i].rect.width).toBeCloseTo(all[i - 3].rect.width, 0);
+      expect(all[i].rect.top).toBeGreaterThan(all[i - 3].rect.top);
+    }
   });
 });
