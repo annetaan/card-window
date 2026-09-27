@@ -16,7 +16,7 @@ Phases run in this order. Phase 4 changes the API, so the docs wait for it.
 | Phase | What | Status |
 | --- | --- | --- |
 | 1 | Ownership transfer | Done |
-| 2 | Tooling and CI | In progress |
+| 2 | Tooling and CI | Done |
 | 3 | Browser tests before the rewrite | Not started |
 | 4 | Performance rewrite, released as 2.0.0 | Not started |
 | 5 | Astro docs site | Not started |
@@ -36,7 +36,7 @@ Things I learned on the way:
 
 PRs: #61 rename, #62 smoke test, #63 release 1.10.3 and `release.yml`.
 
-## Phase 2. Tooling and CI (in progress)
+## Phase 2. Tooling and CI (done)
 
 Branches: `chore/modern-tooling` for step 1, `chore/ci-workflow` for step 7.
 
@@ -60,11 +60,11 @@ The rule for this phase is to leave the library source alone. The package that c
 - `packages/website`: Docusaurus 2.0.0-beta.18. It is replaced in phase 5.
 - `smoke/`: a standalone npm package outside the pnpm workspace. `npm run use:local` clears `smoke/dist`, packs `packages/main` into it and installs the tarball.
 - `.github/workflows/ci.yml` runs on pull requests and pushes to `main`, on Node 24 with pnpm from `pnpm/action-setup@v6.1.0`. It runs oxlint, the oxfmt check, typecheck, test, build, arethetypeswrong and the smoke test against the packed tarball. It replaced `main.yml`, which failed on every PR: first on the retired cache service behind `actions/setup-node@v2`, and after step 1 because its `cache: yarn` ran `yarn cache dir`, which rejects `packageManager: pnpm@12.6.0`. The whole job runs as a matrix on React 18 and 19, shown as `ci (18)` and `ci (19)`, with `fail-fast: false`. The 18 leg uses the lockfile. The 19 leg switches to the latest React 19 right after the frozen install, so every later step runs on it.
-- `.github/workflows/release.yml` installs and tests with pnpm through `pnpm/action-setup@v6.1.0`. The moving `v6` tag predates pnpm 12 support. It still publishes with `npm publish` in `packages/main`. It is untested until the 1.11.0 tag.
+- `.github/workflows/release.yml` installs and tests with pnpm through `pnpm/action-setup@v6.1.0`. The moving `v6` tag predates pnpm 12 support. It still publishes with `npm publish` in `packages/main`. The `v1.11.0` tag proved it end to end in run 36319590312. `publish` ran 162 tests and published with Trusted Publishing and provenance. `smoke` passed against the published 1.11.0. The registry took about 3 minutes to serve the new version. The wait allows about 5, with 30 tries 10 seconds apart. The run warned that `actions/checkout@v4` and `actions/setup-node@v4` target Node 20, which GitHub deprecated. `ci.yml` already uses v7 of both. Moving `release.yml` to v7 is a decided follow-up. See "Decisions".
 - `.vscode/settings.json` was deleted in step 5. The repository has no editor settings.
 - Dev React is 18.3.1, a devDependency of `packages/main`, with `@types/react` 18.3.31 and `@types/react-dom` 18.3.7. `@testing-library/react` is 16.3.3 with `@testing-library/dom` 10.4.2, and it supports React 18 and 19. The peer range is `>=16.13.0 <20`. React 16.13 and 17 are inside it, but nothing tests them. `@testing-library/react` 16 cannot run on React 17. The smoke test uses React 18 unless React 19 is passed to `use:local`.
-- `version` in `packages/main/package.json` is 1.11.0, but 1.11.0 is not on npm yet. npm `latest` is 1.10.3, whose peer range is `>=16.13.0 <19`.
-- `README.md` and `packages/main/README.md` have a Requirements section. The root README is what GitHub shows, so from the merge until the tag it describes 1.11.0, which is not on npm yet. The package README reaches npm only with the publish.
+- `version` in `packages/main/package.json` is 1.11.0, and 1.11.0 is npm `latest`. Its peer range is `>=16.13.0 <20`.
+- `README.md` and `packages/main/README.md` have a Requirements section. Both describe 1.11.0, which is on npm.
 
 ### Steps
 
@@ -113,17 +113,21 @@ Step 7 ran right after step 1, ahead of step 2, because `main.yml` failed on eve
    The lockfile went from 235 `packages` entries to 227, with 20 removed and 12 added. The removed ones are React 17 and its types, `@testing-library/react` 12.1.5, `@testing-library/dom` 8.12.0, `scheduler` 0.20.2, `object-assign`, `chalk` 4.1.2 with its chain down to `supports-color` 7.2.0, and `@babel/helper-validator-identifier` 7.16.7. The added ones are React 18.3.1 and its types, `@testing-library/react` 16.3.3, `@testing-library/dom` 10.4.2, `scheduler` 0.23.2 and `dequal`. `aria-query`, `@types/aria-query`, `lz-string` and `csstype` appear on both sides in different versions. None of the 215 entries that stayed changed in `packages`. In `snapshots` only `@babel/highlight@7.16.10` changed. It now depends on `@babel/helper-validator-identifier` 7.29.7, which was already there, in place of 7.16.7. As in steps 4 and 5, these counts leave out the 15 entries for pnpm itself in the first YAML document of the lockfile. With them it is 250 to 242.
    `lib/` is byte-identical to #69, and `npm pack` still lists 6 files. The wider peer range reaches consumers only through the packed `package.json`.
 7. **CI.** Done, ahead of step 2. `ci.yml` replaced `main.yml`. It runs on pull requests and pushes to `main` with Node 24, and runs install, lint, test, build, `@arethetypeswrong/cli --pack` and the smoke test with `use:local`, on the tooling that exists today. `use:local` now creates `smoke/dist` itself, so it works on a fresh checkout and `npm test` no longer quietly tests `latest` from the registry after it fails. CI does not check where the installed package came from, since a failed step already stops the job. Later steps extend `ci.yml`: typecheck in step 2, test files in that typecheck in step 4, oxlint and the format check in step 5, the React 18 and 19 matrix in step 6.
-8. **Release.** Done in step 1. `release.yml` installs and tests with pnpm. It keeps `npm publish` in `packages/main`, because npm 11.5.1 or later is what I verified with Trusted Publishing. It keeps the file name. The 1.11.0 release in step 10 verifies it.
+8. **Release.** Done in step 1. `release.yml` installs and tests with pnpm. It keeps `npm publish` in `packages/main`, because npm 11.5.1 or later is what I verified with Trusted Publishing. It keeps the file name. The 1.11.0 release in step 10 verified it.
 9. **Docs in the repo.** Add the commands from steps 4 and 5 to `CONTRIBUTING.md`, for test, lint and format. The pnpm basics landed in step 1. The test, coverage and typecheck lines landed in step 4. The lint and format lines landed in step 5.
 10. **Release 1.11.0** from a tag to prove the new pipeline end to end. It is a minor release, because the syntax floor rises to ES2019 and consumers need TypeScript 4.5 or later. Bump `version` in `packages/main/package.json` in this step.
-   Half done. `version` in `packages/main/package.json` is 1.11.0. Both READMEs got a Requirements section with the React peer range, TypeScript 4.5 or later and ES2019. The usage examples did not change.
-   The rest waits until after the merge and needs michiharu's go-ahead. Push the `v1.11.0` tag. `release.yml` then publishes and runs the smoke test against the published 1.11.0. After that succeeds, create a GitHub Release by hand, with its body taken from the section on what changes for consumers in the PR for this step. The last item under "Done when" stays open until then.
+   Done. `version` in `packages/main/package.json` is 1.11.0. Both READMEs got a Requirements section with the React peer range, TypeScript 4.5 or later and ES2019. The usage examples did not change.
+   After #71 merged, the `v1.11.0` tag was pushed on 3fe2af6 with michiharu's go-ahead. Run 36319590312 of `release.yml` passed both jobs. `publish` checked the tag against `version`, ran 162 tests and published 1.11.0 with provenance through Trusted Publishing. `smoke` passed against the published 1.11.0. npm `latest` is 1.11.0. The GitHub Release v1.11.0 was created by hand. Its body is the "What changes for consumers" section of #71, with each heading one level up.
 
 ### Done when
 
 - `ci.yml` is green on the PR.
 - arethetypeswrong reports no problems.
 - The smoke test passes against the packed tarball and against the published 1.11.0.
+
+All three hold. The last one held when the smoke job of run 36319590312 passed against the published 1.11.0.
+
+PRs: #64 pnpm, #65 CI, #66 tsdown, #67 TypeScript 5, #68 Vitest, #69 oxlint and oxfmt, #70 React, #71 version 1.11.0 and the READMEs, #72 release record.
 
 ## Phase 3. Browser tests before the rewrite
 
@@ -189,6 +193,7 @@ Decided on 2026-09-27.
 - The peer range was widened to `<20` in the same PR, after `ci (18)` and `ci (19)` passed on the old range.
 - Release notes for 1.11.0: a GitHub Release, created by hand after the publish succeeds, with its body taken from the PR. No CHANGELOG file.
 - The READMEs get a short Requirements section in 1.11.0. The usage examples stay as they are.
+- `release.yml` moves `actions/checkout` and `actions/setup-node` from v4 to v7, the versions `ci.yml` uses. It is a follow-up in its own PR, after phase 2, and does not reopen it. `release.yml` runs only on a tag, so the next release tag verifies the change.
 
 ## Open questions
 
