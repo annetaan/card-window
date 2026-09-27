@@ -2,7 +2,7 @@
 
 This is the working plan for bringing card-window up to date. I keep it here so a new session can pick up where the last one stopped. Update the status lines as work lands.
 
-Last updated: 2026-09-27
+Last updated: 2026-09-28
 
 ## Goals
 
@@ -17,7 +17,7 @@ Phases run in this order. Phase 4 changes the API, so the docs wait for it.
 | --- | --- | --- |
 | 1 | Ownership transfer | Done |
 | 2 | Tooling and CI | Done |
-| 3 | Browser tests before the rewrite | Not started |
+| 3 | Browser tests before the rewrite | Done |
 | 4 | Performance rewrite, released as 2.0.0 | Not started |
 | 5 | Astro docs site | Not started |
 
@@ -129,7 +129,7 @@ All three hold. The last one held when the smoke job of run 36319590312 passed a
 
 PRs: #64 pnpm, #65 CI, #66 tsdown, #67 TypeScript 5, #68 Vitest, #69 oxlint and oxfmt, #70 React, #71 version 1.11.0 and the READMEs, #72 release record.
 
-## Phase 3. Browser tests before the rewrite
+## Phase 3. Browser tests before the rewrite (done)
 
 Today's tests run in jsdom and assert the `style` values that JavaScript computes. After phase 4 the browser does the layout, and jsdom cannot see it. Before the rewrite, add tests in Vitest Browser Mode with Playwright that check:
 
@@ -139,7 +139,55 @@ Today's tests run in jsdom and assert the `style` values that JavaScript compute
 - that `loadMore` fires when the loading card or row appears
 - `onScroll` with `indexesOfVisible`
 
-These tests must pass on 1.10.x first. Then I know they check behavior, and they will still hold after the rewrite.
+The tests pass on the source at 1.11.0. Phase 2 kept its runtime behavior equal to 1.10.3. So I know they check behavior, and they should still hold after the rewrite.
+
+### Where things stand
+
+- `packages/main/vitest.config.mts` has two Vitest projects. `unit` runs in jsdom and takes every test file except `*.browser.test.tsx`. `browser` runs those in Vitest Browser Mode, with Playwright and Chromium and `headless: true`. Vitest defaults `headless` to `process.env.CI`, so it is set explicitly.
+- `test` runs `unit` only and `test:browser` runs `browser`. `coverage` covers `unit`. The root `package.json` has `test:browser` too.
+- New devDependencies in `packages/main`: `@vitest/browser-playwright` ^5.0.2, `playwright` ^1.63.0 and `vitest-browser-react` ^2.3.0.
+- `packages/main/tsconfig.json` sets `skipLibCheck`. The types of `vitest/browser` need Node's `BufferEncoding`, and `src` has no Node types.
+- `.gitignore` ignores the screenshots Browser Mode writes when a test fails.
+- `ci.yml` installs the Chromium headless shell with `--with-deps` and runs `pnpm test:browser` after `pnpm test`, on both React legs. `release.yml` did not change.
+- `CONTRIBUTING.md` has the `pnpm test:browser` line, the one-time Chromium install and the two extra steps for the React 19 check.
+
+### Tests
+
+`src/CardWindow.browser.test.tsx` has 19 tests. `columns` has 7, `last row` 7, `scroll offset` 1, `loadMore` 3 and `onScroll` 1. `pnpm test` still reports 2 files and 162 tests passed.
+
+I ran both on this branch. On React 18.3.1, `pnpm test` reports 162 passed and `pnpm test:browser` 19 passed. In a scratch copy switched to React 19.3.0, the same two commands report the same numbers.
+
+While the tests were written, each group except `columns` was checked against a deliberate break, and it failed as expected:
+
+- With the default `lastRowAlign` changed to `'inherit'`, 6 of the 7 last-row cases fail. `left` passes.
+- With a `scrollTop` of 800 instead of 1108, the scroll offset test fails.
+- Never calling `loadMore` fails all 3 `loadMore` tests. Calling it on every scroll fails the 2 "is not called at the top" cases.
+- Dropping the first index from `indexesOfVisible` fails the `onScroll` test.
+
+### The contract the tests rely on
+
+Phase 4 keeps it, or changes it in the test helpers only.
+
+1. The tests import only from the public entry. They never import `functions` or other internals.
+2. The card puts `style` on its root element.
+3. The root element of CardWindow is the scroll container. It is the first child of the frame that sets the width and the height.
+4. Assertions read only `getBoundingClientRect`, whether an element is in the DOM, and the arguments of callbacks. They never read px values from `style`, the `row` and `col` props, or `functions`.
+
+### Notes for phase 4
+
+- The widths in the column tests sit where two rules agree. 1.11.0 gives space-evenly `floor((w - 24) / 108)` columns, and CSS Grid's `auto-fill` gives `floor((w - 8) / 108)`. Phase 4 has to decide how many columns space-evenly gets.
+- 1.11.0 works out the visible rows in `getRenderFirstRow` and `getRenderLastRow`, and that math ignores `spacing.top`. So the scroll offsets in the tests keep every card edge and every 0.5 threshold at a distance.
+- `loadMore` and `onScroll` are asserted without exact call counts, and `onScroll` on its last call only. An `IntersectionObserver` and batching in `requestAnimationFrame` should still pass them.
+
+### Lockfile
+
+The lockfile went from 227 `packages` entries to 246, with 19 added and none removed. The added ones are `@vitest/browser-playwright`, `@vitest/browser`, `@vitest/ui`, `@vitest/utils`, `@vitest/pretty-format`, `playwright`, `playwright-core`, `vitest-browser-react`, `@blazediff/core`, `@polka/url`, `convert-source-map`, `fflate`, `flatted`, `mrmime`, `pathe`, `pngjs`, `sirv`, `totalist` and `ws`. No entry that stayed changed in `packages`. In `snapshots` only `vitest` and `@vitest/coverage-v8` were re-keyed. As in phase 2, these counts leave out the 15 entries for pnpm itself. With them it is 242 to 261.
+
+`lib/` from `pnpm build` is byte-identical to a build of 137324e on `main`, and `npm pack` still lists 6 files.
+
+### Done when
+
+- `ci (18)` and `ci (19)` are green on the PR, with the `pnpm test:browser` step.
 
 ## Phase 4. Performance rewrite (2.0.0)
 
@@ -195,6 +243,14 @@ Decided on 2026-09-27.
 - The READMEs get a short Requirements section in 1.11.0. The usage examples stay as they are.
 - `release.yml` moves `actions/checkout` and `actions/setup-node` from v4 to v7, the versions `ci.yml` uses. It is a follow-up in its own PR, after phase 2, and does not reopen it. `release.yml` runs only on a tag, so the next release tag verifies the change. Done.
 - The checkout in `release.yml` sets `persist-credentials: false`, as `ci.yml` does. Nothing in `release.yml` uses git credentials, so the GitHub token is not left where scripts that run before the publish can read it.
+
+Decided on 2026-09-28.
+
+- Browser tests: Vitest Browser Mode with Playwright, Chromium only, headless.
+- The browser tests render with `vitest-browser-react`. It turns the act environment on only inside its own `act`, so real `ResizeObserver` and scroll updates do not warn. The jsdom tests keep `@testing-library/react`.
+- `pnpm test` stays jsdom only. `pnpm test:browser` is a separate script. `release.yml` does not run the browser tests.
+- `skipLibCheck: true` rather than `@types/node`. With `@types/node`, Node globals would type-check in `src`.
+- The browser tests assert behavior only, as the contract in phase 3 says.
 
 ## Open questions
 
