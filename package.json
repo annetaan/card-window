@@ -8,6 +8,7 @@
     "coverage": "pnpm --filter @annetaan/card-window test --coverage",
     "fix": "pnpm --filter @annetaan/card-window fix",
     "test": "pnpm --filter @annetaan/card-window test",
+    "typecheck": "pnpm --filter @annetaan/card-window typecheck",
     "watch": "pnpm --filter @annetaan/card-window watch"
   },
   "devDependencies": {

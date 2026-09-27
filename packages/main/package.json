@@ -21,7 +21,7 @@
   "author": "michiharu",
   "main": "./lib/cjs/index.js",
   "module": "./lib/esm/index.mjs",
-  "types": "./lib/esm/index.d.ts",
+  "types": "./lib/cjs/index.d.ts",
   "exports": {
     ".": {
       "import": {
@@ -39,16 +39,15 @@
     "/lib"
   ],
   "scripts": {
-    "build": "rollup -c",
+    "build": "tsdown",
     "coverage": "jest --coverage",
     "fix": "npm run format && npm run lint && npx sort-package-json",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "lint": "eslint --fix --ext .ts,.tsx ./src",
-    "postbuild": "node scripts/emit-mts-types.cjs",
-    "prebuild": "rm -rf lib",
     "prepack": "npm run build",
     "test": "jest",
-    "watch": "rollup -cw"
+    "typecheck": "tsc --noEmit",
+    "watch": "tsdown --watch"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^5.16.1",
@@ -68,9 +67,7 @@
     "eslint-plugin-react": "^7.28.0",
     "jest": "^27.4.5",
     "prettier": "^2.5.1",
-    "rollup": "^2.61.1",
-    "rollup-plugin-typescript2": "^0.31.1",
-    "tslib": "^2.3.1",
+    "tsdown": "^0.23.0",
     "typescript": "^4.5.3"
   },
   "peerDependencies": {

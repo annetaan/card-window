@@ -28,6 +28,7 @@ jobs:
       # The lint script runs with --fix, which would hide errors here. Step 5 replaces ESLint.
       - name: Lint
         run: pnpm --filter @annetaan/card-window exec eslint --ext .ts,.tsx ./src
+      - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
       - name: Check the types of the packed package

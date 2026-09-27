@@ -48,14 +48,15 @@ The rule for this phase is to leave the library source alone. The package that c
 - `pnpm-lock.yaml` was imported from `yarn.lock` with `pnpm import`, so every version is unchanged.
 - `allowBuilds` in `pnpm-workspace.yaml` denies the builds of `esbuild` and `core-js-pure`.
 - The pnpm 10 that mise installs locally cannot switch itself to 12. mise older than 2026.9.x cannot install pnpm 12 either, because its aqua registry expects the old asset name `pnpm-macos-arm64` and pnpm 12 ships `pnpm-darwin-arm64.tar.gz`. Upgrade mise first (`brew upgrade mise` for a Homebrew install, which cannot run `mise self-update`), then run `mise upgrade pnpm` and open a new shell. `npx -y pnpm@12.6.0` remains the fallback.
-- `packages/main`: rollup 2 with rollup-plugin-typescript2, TypeScript 4.6, jest 27 with esbuild-jest, ESLint 8 with airbnb and `.eslintrc.js`, Prettier 2. The build type-checks `src` through rollup-plugin-typescript2. Nothing type-checks the test files.
-- `tslib` is a devDependency of `packages/main`. rollup-plugin-typescript2 needs it under the strict layout of pnpm.
-- `packages/main/scripts/emit-mts-types.cjs` copies ESM types to `.d.mts`. It exists only because of rollup-plugin-typescript2. Delete it once tsdown emits `.d.mts` and `.d.cts`.
-- Build output is `lib/cjs/index.js`, `lib/esm/index.mjs` and their types. `exports` maps `import` and `require` with separate `types`.
+- `packages/main`: tsdown 0.23 (rolldown), TypeScript 4.6, jest 27 with esbuild-jest, ESLint 8 with airbnb and `.eslintrc.js`, Prettier 2. tsdown does not type-check. `pnpm typecheck` runs `tsc --noEmit` on `src`, and CI runs it too. Nothing type-checks the test files.
+- TypeScript stays at 4.6 until step 3. tsdown's peer range starts at TypeScript 5, so `pnpm add` prints a peer warning. Step 3 clears it.
+- `packages/main/tsdown.config.mts` sets the build output. It writes four files: `lib/esm/index.mjs`, `lib/esm/index.d.mts`, `lib/cjs/index.js` and `lib/cjs/index.d.ts`. Each format gets one type file. The target is ES2019. The syntax target comes from the tsdown config, not from `tsconfig.json`.
+- `main`, `module` and `exports` are the same as in 1.10.3. `types` points at `./lib/cjs/index.d.ts`.
+- tsdown needs Node `^22.18.0 || ^24.11.0 || >=26.0.0`.
 - `packages/website`: Docusaurus 2.0.0-beta.18. It is replaced in phase 5.
 - `smoke/`: a standalone npm package outside the pnpm workspace. `npm run use:local` clears `smoke/dist`, packs `packages/main` into it and installs the tarball.
-- `.github/workflows/ci.yml` runs on pull requests and pushes to `main`, on Node 24 with pnpm from `pnpm/action-setup@v6.1.0`. It runs lint, test, build, arethetypeswrong and the smoke test against the packed tarball. It replaced `main.yml`, which failed on every PR: first on the retired cache service behind `actions/setup-node@v2`, and after step 1 because its `cache: yarn` ran `yarn cache dir`, which rejects `packageManager: pnpm@12.6.0`.
-- `.github/workflows/release.yml` installs and tests with pnpm through `pnpm/action-setup@v6.1.0`. The moving `v6` tag predates pnpm 12 support. It still publishes with `npm publish` in `packages/main`. It is untested until the 1.10.4 tag.
+- `.github/workflows/ci.yml` runs on pull requests and pushes to `main`, on Node 24 with pnpm from `pnpm/action-setup@v6.1.0`. It runs lint, typecheck, test, build, arethetypeswrong and the smoke test against the packed tarball. It replaced `main.yml`, which failed on every PR: first on the retired cache service behind `actions/setup-node@v2`, and after step 1 because its `cache: yarn` ran `yarn cache dir`, which rejects `packageManager: pnpm@12.6.0`.
+- `.github/workflows/release.yml` installs and tests with pnpm through `pnpm/action-setup@v6.1.0`. The moving `v6` tag predates pnpm 12 support. It still publishes with `npm publish` in `packages/main`. It is untested until the 1.11.0 tag.
 - Dev dependencies use React 17. The smoke test uses React 18. The peer range is `>=16.13.0 <19`.
 
 ### Steps
@@ -64,9 +65,17 @@ Step 7 ran right after step 1, ahead of step 2, because `main.yml` failed on eve
 
 1. **pnpm.** Add `pnpm-workspace.yaml` and `packageManager` in the root `package.json`. Delete `yarn.lock`. Turn root scripts into `pnpm --filter`. The workspace holds `packages/main` only. `packages/website` stays out until phase 5 replaces it, so the current docs site cannot be redeployed until then. Drop the root `start` and `deploy` scripts that point at it.
    Done. `lib/` from `pnpm build` is byte-identical to the published 1.10.3. `tslib` was added as a devDependency, and step 2 must remove it together with rollup-plugin-typescript2. `coverage` in `packages/main` is now `jest --coverage`. Steps 8 and 9 were pulled into this step for the parts yarn broke, which were `release.yml` and the Development section of `CONTRIBUTING.md`.
-2. **tsdown.** Replace rollup. Emit ESM and CJS with `.d.mts` and `.d.cts`. Keep the `exports` shape from 1.10.3. Delete `rollup.config.js`, `scripts/emit-mts-types.cjs` and the `prebuild` and `postbuild` scripts. Remove `tslib` with rollup-plugin-typescript2. Check `npm pack --dry-run` for the file list.
-   Add a `typecheck` script with `tsc --noEmit` and run it in `ci.yml`. Today rollup-plugin-typescript2 type-checks `src` during the build, and tsdown may not.
+2. **tsdown.** Replace rollup. Emit ESM and CJS, with `.d.mts` for ESM and `.d.ts` beside the CJS `.js`. Keep the `exports` shape from 1.10.3. Delete `rollup.config.js`, `scripts/emit-mts-types.cjs` and the `prebuild` and `postbuild` scripts. Remove `tslib` with rollup-plugin-typescript2. Check `npm pack --dry-run` for the file list.
+   Add a `typecheck` script with `tsc --noEmit` and run it in `ci.yml`. rollup-plugin-typescript2 type-checked `src` during the build. tsdown does not.
+   Done. rolldown cannot tell a type re-export from a value and failed with `MISSING_EXPORT`. So the type re-exports in `src/index.ts` became `export type`. The emitted JS did not change. The ESM file is 10.96 kB and the CJS file 12.15 kB. Each type file is 7.59 kB. 1.10.3 had 14.3 kB for ESM and 15.2 kB for CJS. The tarball went from 10 files to 6. The lockfile lost 20 packages on the rollup side, and no existing entry changed. arethetypeswrong and the smoke test pass. The runtime export keys are the same as in 1.10.3.
+   Differences from 1.10.3:
+   - The syntax goes from ES5 to ES2019. IE11 and other old browsers drop out.
+   - The types are bundled. `CardWindow.d.*` and `lib/esm/index.d.ts` are gone.
+   - `types` points at a new path.
+   - The internal `Spacing` type shows as `Spacing$1` in hovers and errors. Its structure is the same.
+   - The type files use `export { type X }`, so consumers need TypeScript 4.5 or later.
 3. **TypeScript 5.** Update `tsconfig.json`. The current one targets ES5 with `moduleResolution: node`.
+   TypeScript 5 removes tsdown's peer warning. tsdown sets the syntax target, so `target` in `tsconfig.json` only affects type checking. Keep `jsx: react`, the classic runtime. The automatic runtime imports `react/jsx-runtime`, and React 16.13 does not have it. Consider `isolatedModules` or `verbatimModuleSyntax`, so typecheck catches the type re-export problem from step 2.
 4. **Vitest.** Replace jest and esbuild-jest. Keep jsdom. Move `@testing-library/react` to a version that supports the React used in dev. All 162 tests must pass without changes to what they assert.
    Type-check the test files as well, and have the typecheck step in `ci.yml` cover them.
 5. **Lint and format.** oxlint and oxfmt replace ESLint, Prettier and all the airbnb configs. Delete `.eslintrc.js`, `tsconfig.eslint.json` and `.prettierrc.js`. Carry over what oxlint supports from the current rules: react-hooks, the TypeScript rules, `sort-imports` and import order with React first. Keep the format close to today, with print width 120, single quotes and semicolons, so the first format run makes a small diff. Update `.vscode/settings.json`.
@@ -74,15 +83,15 @@ Step 7 ran right after step 1, ahead of step 2, because `main.yml` failed on eve
 6. **React.** Move dev React to 18. Widen the peer range to include React 19, but only after CI runs the unit tests and the smoke test on React 18 and 19 in a matrix and both pass.
    The matrix goes in `ci.yml`.
 7. **CI.** Done, ahead of step 2. `ci.yml` replaced `main.yml`. It runs on pull requests and pushes to `main` with Node 24, and runs install, lint, test, build, `@arethetypeswrong/cli --pack` and the smoke test with `use:local`, on the tooling that exists today. `use:local` now creates `smoke/dist` itself, so it works on a fresh checkout and `npm test` no longer quietly tests `latest` from the registry after it fails. CI does not check where the installed package came from, since a failed step already stops the job. Later steps extend `ci.yml`: typecheck in step 2, test files in that typecheck in step 4, oxlint and the format check in step 5, the React 18 and 19 matrix in step 6.
-8. **Release.** Done in step 1. `release.yml` installs and tests with pnpm. It keeps `npm publish` in `packages/main`, because npm 11.5.1 or later is what I verified with Trusted Publishing. It keeps the file name. The 1.10.4 release in step 10 verifies it.
+8. **Release.** Done in step 1. `release.yml` installs and tests with pnpm. It keeps `npm publish` in `packages/main`, because npm 11.5.1 or later is what I verified with Trusted Publishing. It keeps the file name. The 1.11.0 release in step 10 verifies it.
 9. **Docs in the repo.** Add the commands from steps 4 and 5 to `CONTRIBUTING.md`, for test, lint and format. The pnpm basics landed in step 1.
-10. **Release 1.10.4** from a tag to prove the new pipeline end to end.
+10. **Release 1.11.0** from a tag to prove the new pipeline end to end. It is a minor release, because the syntax floor rises to ES2019 and consumers need TypeScript 4.5 or later. Bump `version` in `packages/main/package.json` in this step.
 
 ### Done when
 
 - `ci.yml` is green on the PR.
 - arethetypeswrong reports no problems.
-- The smoke test passes against the packed tarball and against the published 1.10.4.
+- The smoke test passes against the packed tarball and against the published 1.11.0.
 
 ## Phase 3. Browser tests before the rewrite
 
@@ -121,6 +130,11 @@ Decided on 2026-09-27.
 - CI first: step 7 runs before step 2.
 - Typecheck: `src` in CI from step 2, test files from step 4.
 - CI does not verify that the smoke test installed the local tarball.
+- `src/index.ts` may split its type re-exports into `export type`. It is the only source change in phase 2, and the emitted JS does not change.
+- tsdown targets ES2019. tsdown cannot emit ES5.
+- CJS types are `.d.ts` beside the `.js`. With `.d.cts`, consumers on TypeScript 4.5 and 4.6 would not see the types.
+- TypeScript stays at 4.6.3 in step 2. Step 3 clears tsdown's peer warning.
+- The next release is 1.11.0, not 1.10.4, because the syntax floor and the TypeScript floor both rise.
 
 ## Open questions
 
