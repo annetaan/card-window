@@ -2,14 +2,21 @@
 
 ## Development
 
-- `yarn`: install packages in root and subdirectories.
-- `yarn build`: build card-window.
-- `yarn start`: start document server.
+- `pnpm install`: installs the workspace, which holds `packages/main` only.
+- `pnpm build`: builds card-window.
+- `pnpm test`: runs the unit tests.
+
+`packageManager` in the root `package.json` pins pnpm 12.6.0.
+pnpm 10 cannot switch itself to 12 and fails with `Unknown system error -8`.
+Use pnpm 12, or run `npx -y pnpm@12.6.0`.
+
+`packages/website` is outside the workspace until phase 5 replaces it.
+Until then, the docs site cannot be run or deployed.
 
 ## Smoke test
 
 `smoke/` installs `@annetaan/card-window@latest` from the npm registry and checks the published package.
-It sits outside the workspaces on purpose, so it never links the local `packages/main`.
+It sits outside the pnpm workspace on purpose, so it never links the local `packages/main`.
 
 ```bash
 cd smoke
