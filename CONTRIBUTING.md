@@ -25,6 +25,7 @@ npm test
 ```
 
 To check a build before it is published, pack `packages/main` and install the tarball instead.
+`use:local` builds through the `prepack` script of `packages/main`, so run `pnpm install` at the root first.
 
 ```bash
 cd smoke
