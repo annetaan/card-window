@@ -1,9 +1,9 @@
 import * as React from 'react';
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
 
-import { CardProps, CardWindow, CardWindowProps, JustifyContent, range } from '.';
+import { CardProps, CardWindow, CardWindowProps, JustifyContent, Loading, range } from '.';
 
 // These tests pin down what a user sees, so that the layout can be rewritten
 // underneath them. They import only from the public entry, and they read only
@@ -62,6 +62,20 @@ const indexesInView = (scroller: HTMLElement) => {
   return cards(scroller)
     .filter((c) => c.rect.bottom > view.top && c.rect.top < view.bottom)
     .map((c) => c.index);
+};
+
+// Serves both loading types, since both give the component a style.
+const LoadingComponent = ({ style }: { style: React.CSSProperties }) => <div data-loading="" style={style} />;
+
+const nextFrames = () =>
+  new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+
+const loadingInView = (scroller: HTMLElement) => {
+  const el = scroller.querySelector<HTMLElement>('[data-loading]');
+  if (!el) return false;
+  const view = scroller.getBoundingClientRect();
+  const rect = el.getBoundingClientRect();
+  return rect.bottom > view.top && rect.top < view.bottom;
 };
 
 describe('columns', () => {
@@ -130,5 +144,39 @@ describe('scroll offset', () => {
     const rendered = cards(scroller).map((c) => c.index);
     expect(rendered).not.toContain(0);
     expect(rendered).not.toContain(299);
+  });
+});
+
+describe('loadMore', () => {
+  // No exact call count: 1.11.0 calls loadMore from an effect that runs
+  // whenever the rendered items change, and the rewrite will use an
+  // IntersectionObserver. At the top, 300 cards are 100 rows, about 10,800px,
+  // so the end is far outside any overscan. The two frames give an observer a
+  // chance to fire before the "not called" check.
+  test.each(['card', 'row'] as const)(
+    'with a loading %s, is not called at the top and is called at the end',
+    async (type) => {
+      const loadMore = vi.fn();
+      const loading: Loading =
+        type === 'card'
+          ? { type, count: 2, LoadingComponent, loadMore }
+          : { type, height: 50, LoadingComponent, loadMore };
+      const { scroller } = await renderCardWindow(400, 330, { data: range(300), loading });
+      await expect.poll(() => columnCount(scroller)).toBe(3);
+      await nextFrames();
+      expect(loadMore).not.toHaveBeenCalled();
+      scroller.scrollTop = scroller.scrollHeight;
+      await expect.poll(() => loadMore.mock.calls.length).toBeGreaterThan(0);
+      expect(loadingInView(scroller)).toBe(true);
+    },
+  );
+
+  test('is called on mount when the data does not fill the view', async () => {
+    const loadMore = vi.fn();
+    await renderCardWindow(400, 330, {
+      data: range(5),
+      loading: { type: 'card', count: 1, LoadingComponent, loadMore },
+    });
+    await expect.poll(() => loadMore.mock.calls.length).toBeGreaterThan(0);
   });
 });
