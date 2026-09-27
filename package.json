@@ -1,18 +1,14 @@
 {
   "name": "card-window-root",
   "private": true,
-  "workspaces": [
-    "packages/**"
-  ],
+  "packageManager": "pnpm@12.6.0",
   "scripts": {
-    "build": "yarn workspace @annetaan/card-window build",
-    "ci": "yarn fix && yarn test",
-    "coverage": "yarn workspace @annetaan/card-window test --coverage",
-    "deploy": "GIT_USER=michiharu yarn workspace website deploy",
-    "fix": "yarn workspace @annetaan/card-window fix",
-    "start": "yarn workspace website start",
-    "test": "yarn workspace @annetaan/card-window test",
-    "watch": "yarn workspace @annetaan/card-window watch"
+    "build": "pnpm --filter @annetaan/card-window build",
+    "ci": "pnpm run fix && pnpm run test",
+    "coverage": "pnpm --filter @annetaan/card-window test --coverage",
+    "fix": "pnpm --filter @annetaan/card-window fix",
+    "test": "pnpm --filter @annetaan/card-window test",
+    "watch": "pnpm --filter @annetaan/card-window watch"
   },
   "devDependencies": {
     "@types/react": "^17.0.37",
