@@ -15,6 +15,10 @@ concurrency:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        react: ['18', '19']
     steps:
       - uses: actions/checkout@v7
         with:
@@ -25,6 +29,11 @@ jobs:
       # The moving v6 tag predates pnpm 12 support, which came in v6.1.0.
       - uses: pnpm/action-setup@v6.1.0
       - run: pnpm install --frozen-lockfile
+      # The lockfile holds React 18. This rewrites package.json and the lockfile in this checkout only,
+      # so every step below runs on the latest React 19.
+      - name: Switch to React 19
+        if: matrix.react == '19'
+        run: pnpm --filter @annetaan/card-window add -D react@19 react-dom@19 @types/react@19 @types/react-dom@19
       - name: Lint
         run: pnpm lint
       - name: Check formatting
@@ -38,8 +47,16 @@ jobs:
         working-directory: smoke
         run: npm install
       - name: Install the packed tarball
+        if: matrix.react == '18'
         working-directory: smoke
         run: npm run use:local
+      # React 19 has to go into the same install as the tarball. A second `npm install --no-save`
+      # puts `latest` from the registry back in place of the tarball, and the smoke test still passes.
+      # npm appends these arguments to the install that ends `use:local`.
+      - name: Install the packed tarball with React 19
+        if: matrix.react == '19'
+        working-directory: smoke
+        run: npm run use:local -- react@19 react-dom@19 @types/react@19 @types/react-dom@19
       - name: Run the smoke test against the packed tarball
         working-directory: smoke
         run: npm test
