@@ -3,7 +3,7 @@ import * as React from 'react';
 import { describe, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
 
-import { CardProps, CardWindow, CardWindowProps, JustifyContent, Loading, range } from '.';
+import { CardProps, CardWindow, CardWindowProps, JustifyContent, Loading, OnScrollProps, range } from '.';
 
 // These tests pin down what a user sees, so that the layout can be rewritten
 // underneath them. They import only from the public entry, and they read only
@@ -178,5 +178,24 @@ describe('loadMore', () => {
       loading: { type: 'card', count: 1, LoadingComponent, loadMore },
     });
     await expect.poll(() => loadMore.mock.calls.length).toBeGreaterThan(0);
+  });
+});
+
+describe('onScroll', () => {
+  // The default thresholdOfVisible is 0.5, and row r spans [8 + 108r, 108 + 108r].
+  // At 1108 the view is [1108, 1438]: row 10 is 80% in, rows 11 and 12 are fully
+  // in, and row 13 is 26% in (out), so cards 30 to 38. At 500 the view is
+  // [500, 830]: row 4 is 40% in (out), rows 5 and 6 are fully in, and row 7 is
+  // 66% in, so cards 15 to 23. Only the last call is checked, so the rewrite may
+  // batch calls per animation frame. The second scroll goes backward, which
+  // covers both directions without asserting on direction.
+  test('reports the cards at least half in view as indexesOfVisible', async () => {
+    const onScroll = vi.fn<(props: OnScrollProps) => void>();
+    const { scroller } = await renderCardWindow(400, 330, { data: range(300), onScroll });
+    await expect.poll(() => columnCount(scroller)).toBe(3);
+    scroller.scrollTop = 1108;
+    await expect.poll(() => onScroll.mock.lastCall?.[0].indexesOfVisible).toEqual(range(30, 39));
+    scroller.scrollTop = 500;
+    await expect.poll(() => onScroll.mock.lastCall?.[0].indexesOfVisible).toEqual(range(15, 24));
   });
 });
