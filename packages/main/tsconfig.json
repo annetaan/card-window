@@ -9,5 +9,5 @@
     "noEmit": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "lib", "src/**/*.test.ts", "src/**/*.test.tsx"]
+  "exclude": ["node_modules", "lib"]
 }

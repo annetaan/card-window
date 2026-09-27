@@ -410,7 +410,7 @@ describe('getNextOffset', () =>
 
 let instanceResize: ResizeObserver | null = null;
 let callbackResize: ResizeObserverCallback | null = null;
-global.ResizeObserver = class MockResizeObjerver {
+globalThis.ResizeObserver = class MockResizeObjerver {
   constructor(callback: ResizeObserverCallback) {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     instanceResize = this;

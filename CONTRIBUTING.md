@@ -6,7 +6,7 @@
 - `pnpm build`: builds card-window.
 - `pnpm test`: runs the unit tests with Vitest.
 - `pnpm coverage`: runs the unit tests with a coverage report.
-- `pnpm typecheck`: type-checks `src` with `tsc`.
+- `pnpm typecheck`: type-checks `src`, test files included, with `tsc`.
 
 `packageManager` in the root `package.json` pins pnpm 12.6.0.
 pnpm 10 cannot switch itself to 12 and fails with `Unknown system error -8`.
