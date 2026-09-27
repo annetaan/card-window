@@ -5,6 +5,7 @@ import {
   render,
   // screen
 } from '@testing-library/react';
+import { describe, expect, test } from 'vitest';
 
 import CardWindow, {
   CardProps,
@@ -16,8 +17,6 @@ import CardWindow, {
   functions,
   range,
 } from './CardWindow';
-
-import '@testing-library/jest-dom';
 
 const {
   getColumns,
