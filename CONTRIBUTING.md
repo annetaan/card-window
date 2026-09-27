@@ -43,6 +43,29 @@ npm run use:local
 npm test
 ```
 
+## React 19
+
+CI runs the unit tests and the smoke test on React 18 from the lockfile, and again on the latest React 19.
+To run them on React 19 locally, work in a scratch copy.
+The switch rewrites `packages/main/package.json` and `pnpm-lock.yaml`, and `git archive` copies only what is committed.
+
+```bash
+mkdir /path/to/scratch
+git archive HEAD | tar -x -C /path/to/scratch
+cd /path/to/scratch
+pnpm install --frozen-lockfile
+pnpm --filter @annetaan/card-window add -D react@19 react-dom@19 @types/react@19 @types/react-dom@19
+pnpm test
+cd smoke
+npm install
+npm run use:local -- react@19 react-dom@19 @types/react@19 @types/react-dom@19
+npm test
+```
+
+Pass React 19 to `use:local` as shown, so it goes into the same install as the packed tarball.
+A second `npm install --no-save` replaces the tarball with `latest` from the registry, and the smoke test then checks the wrong package.
+`npm warn ERESOLVE overriding peer dependency` during that install is expected.
+
 ## Release
 
 Releases are published from GitHub Actions with npm Trusted Publishing.
