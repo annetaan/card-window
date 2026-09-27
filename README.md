@@ -15,6 +15,12 @@ npm install @annetaan/card-window
 yarn add @annetaan/card-window
 ```
 
+## Requirements
+
+- React and React DOM 16.13 or later, up to 19. CI tests React 18 and 19.
+- TypeScript 4.5 or later, if you use the bundled types.
+- A browser or runtime with ES2019 support. The package is built to ES2019, so it does not run in IE11.
+
 ## Usage
 
 Learn more at [annetaan.github.io/card-window/](https://annetaan.github.io/card-window/)
