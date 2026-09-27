@@ -38,7 +38,7 @@ PRs: #61 rename, #62 smoke test, #63 release 1.10.3 and `release.yml`.
 
 ## Phase 2. Tooling and CI (in progress)
 
-Branch: `chore/modern-tooling`.
+Branches: `chore/modern-tooling` for step 1, `chore/ci-workflow` for step 7.
 
 The rule for this phase is to leave the library source alone. The package that comes out should behave exactly like 1.10.3. The smoke test and arethetypeswrong prove that.
 
@@ -47,28 +47,33 @@ The rule for this phase is to leave the library source alone. The package that c
 - pnpm 12.6.0 workspace, pinned by `packageManager` in the root `package.json`. It holds `packages/main` only.
 - `pnpm-lock.yaml` was imported from `yarn.lock` with `pnpm import`, so every version is unchanged.
 - `allowBuilds` in `pnpm-workspace.yaml` denies the builds of `esbuild` and `core-js-pure`.
-- The pnpm 10 that mise installs locally cannot switch itself to 12. Use `npx -y pnpm@12.6.0` or run `mise upgrade pnpm`.
-- `packages/main`: rollup 2 with rollup-plugin-typescript2, TypeScript 4.6, jest 27 with esbuild-jest, ESLint 8 with airbnb and `.eslintrc.js`, Prettier 2.
+- The pnpm 10 that mise installs locally cannot switch itself to 12. mise older than 2026.9.x cannot install pnpm 12 either, because its aqua registry expects the old asset name `pnpm-macos-arm64` and pnpm 12 ships `pnpm-darwin-arm64.tar.gz`. Upgrade mise first (`brew upgrade mise` for a Homebrew install, which cannot run `mise self-update`), then run `mise upgrade pnpm` and open a new shell. `npx -y pnpm@12.6.0` remains the fallback.
+- `packages/main`: rollup 2 with rollup-plugin-typescript2, TypeScript 4.6, jest 27 with esbuild-jest, ESLint 8 with airbnb and `.eslintrc.js`, Prettier 2. The build type-checks `src` through rollup-plugin-typescript2. Nothing type-checks the test files.
 - `tslib` is a devDependency of `packages/main`. rollup-plugin-typescript2 needs it under the strict layout of pnpm.
 - `packages/main/scripts/emit-mts-types.cjs` copies ESM types to `.d.mts`. It exists only because of rollup-plugin-typescript2. Delete it once tsdown emits `.d.mts` and `.d.cts`.
 - Build output is `lib/cjs/index.js`, `lib/esm/index.mjs` and their types. `exports` maps `import` and `require` with separate `types`.
 - `packages/website`: Docusaurus 2.0.0-beta.18. It is replaced in phase 5.
-- `smoke/`: a standalone npm package outside the pnpm workspace. `npm run use:local` installs a packed tarball.
-- `.github/workflows/main.yml` is broken. `actions/setup-node@v2` fails on a retired cache service before install. Node 14.
+- `smoke/`: a standalone npm package outside the pnpm workspace. `npm run use:local` clears `smoke/dist`, packs `packages/main` into it and installs the tarball.
+- `.github/workflows/ci.yml` runs on pull requests and pushes to `main`, on Node 24 with pnpm from `pnpm/action-setup@v6.1.0`. It runs lint, test, build, arethetypeswrong and the smoke test against the packed tarball. It replaced `main.yml`, which failed on every PR: first on the retired cache service behind `actions/setup-node@v2`, and after step 1 because its `cache: yarn` ran `yarn cache dir`, which rejects `packageManager: pnpm@12.6.0`.
 - `.github/workflows/release.yml` installs and tests with pnpm through `pnpm/action-setup@v6.1.0`. The moving `v6` tag predates pnpm 12 support. It still publishes with `npm publish` in `packages/main`. It is untested until the 1.10.4 tag.
 - Dev dependencies use React 17. The smoke test uses React 18. The peer range is `>=16.13.0 <19`.
 
 ### Steps
 
+Step 7 ran right after step 1, ahead of step 2, because `main.yml` failed on every PR and every later step should be checked by CI. The other steps run in numeric order.
+
 1. **pnpm.** Add `pnpm-workspace.yaml` and `packageManager` in the root `package.json`. Delete `yarn.lock`. Turn root scripts into `pnpm --filter`. The workspace holds `packages/main` only. `packages/website` stays out until phase 5 replaces it, so the current docs site cannot be redeployed until then. Drop the root `start` and `deploy` scripts that point at it.
    Done. `lib/` from `pnpm build` is byte-identical to the published 1.10.3. `tslib` was added as a devDependency, and step 2 must remove it together with rollup-plugin-typescript2. `coverage` in `packages/main` is now `jest --coverage`. Steps 8 and 9 were pulled into this step for the parts yarn broke, which were `release.yml` and the Development section of `CONTRIBUTING.md`.
 2. **tsdown.** Replace rollup. Emit ESM and CJS with `.d.mts` and `.d.cts`. Keep the `exports` shape from 1.10.3. Delete `rollup.config.js`, `scripts/emit-mts-types.cjs` and the `prebuild` and `postbuild` scripts. Remove `tslib` with rollup-plugin-typescript2. Check `npm pack --dry-run` for the file list.
+   Add a `typecheck` script with `tsc --noEmit` and run it in `ci.yml`. Today rollup-plugin-typescript2 type-checks `src` during the build, and tsdown may not.
 3. **TypeScript 5.** Update `tsconfig.json`. The current one targets ES5 with `moduleResolution: node`.
 4. **Vitest.** Replace jest and esbuild-jest. Keep jsdom. Move `@testing-library/react` to a version that supports the React used in dev. All 162 tests must pass without changes to what they assert.
+   Type-check the test files as well, and have the typecheck step in `ci.yml` cover them.
 5. **Lint and format.** oxlint and oxfmt replace ESLint, Prettier and all the airbnb configs. Delete `.eslintrc.js`, `tsconfig.eslint.json` and `.prettierrc.js`. Carry over what oxlint supports from the current rules: react-hooks, the TypeScript rules, `sort-imports` and import order with React first. Keep the format close to today, with print width 120, single quotes and semicolons, so the first format run makes a small diff. Update `.vscode/settings.json`.
+   In `ci.yml`, move the lint step to oxlint and add the format check.
 6. **React.** Move dev React to 18. Widen the peer range to include React 19, but only after CI runs the unit tests and the smoke test on React 18 and 19 in a matrix and both pass.
-7. **CI.** Replace `main.yml` with `ci.yml` on pull requests and pushes to `main`. It runs install, lint, format check, typecheck, test, build, `@arethetypeswrong/cli --pack`, and the smoke test with `use:local`. Node 24. Tests and the smoke test run on React 18 and 19.
-   `use:local` fails on a fresh checkout because `smoke/dist` does not exist. `npm pack --pack-destination` fails with `enoent`, and `npm test` then quietly tests the `latest` on the registry. CI needs `mkdir -p dist`, or the script should create the folder.
+   The matrix goes in `ci.yml`.
+7. **CI.** Done, ahead of step 2. `ci.yml` replaced `main.yml`. It runs on pull requests and pushes to `main` with Node 24, and runs install, lint, test, build, `@arethetypeswrong/cli --pack` and the smoke test with `use:local`, on the tooling that exists today. `use:local` now creates `smoke/dist` itself, so it works on a fresh checkout and `npm test` no longer quietly tests `latest` from the registry after it fails. CI does not check where the installed package came from, since a failed step already stops the job. Later steps extend `ci.yml`: typecheck in step 2, test files in that typecheck in step 4, oxlint and the format check in step 5, the React 18 and 19 matrix in step 6.
 8. **Release.** Done in step 1. `release.yml` installs and tests with pnpm. It keeps `npm publish` in `packages/main`, because npm 11.5.1 or later is what I verified with Trusted Publishing. It keeps the file name. The 1.10.4 release in step 10 verifies it.
 9. **Docs in the repo.** Add the commands from steps 4 and 5 to `CONTRIBUTING.md`, for test, lint and format. The pnpm basics landed in step 1.
 10. **Release 1.10.4** from a tag to prove the new pipeline end to end.
@@ -113,6 +118,9 @@ Decided on 2026-09-27.
 - Website in phase 2: out of the pnpm workspace until phase 5.
 - Package manager: pnpm 12.6.0.
 - `release.yml` and `CONTRIBUTING.md` move to pnpm in step 1, so `main` stays releasable.
+- CI first: step 7 runs before step 2.
+- Typecheck: `src` in CI from step 2, test files from step 4.
+- CI does not verify that the smoke test installed the local tarball.
 
 ## Open questions
 
