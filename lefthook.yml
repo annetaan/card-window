@@ -1,0 +1,24 @@
+# Runs before each commit, on the staged files only. CI runs the same checks on the whole tree.
+# Each package keeps its own .oxlintrc.json, so every command runs from the package root.
+pre-commit:
+  # Format first, so lint reads the formatted files.
+  piped: true
+  jobs:
+    - name: format main
+      root: packages/main/
+      # oxfmt skips the files it does not format, such as .astro and .svg.
+      run: pnpm exec oxfmt --no-error-on-unmatched-pattern {staged_files}
+      stage_fixed: true
+    - name: format website
+      root: packages/website/
+      run: pnpm exec oxfmt --no-error-on-unmatched-pattern {staged_files}
+      stage_fixed: true
+    # oxlint fails when no file matches, so the glob keeps it to the files it lints.
+    - name: lint main
+      root: packages/main/
+      glob: '*.{js,mjs,cjs,jsx,ts,mts,cts,tsx}'
+      run: pnpm exec oxlint {staged_files}
+    - name: lint website
+      root: packages/website/
+      glob: '*.{js,mjs,cjs,jsx,ts,mts,cts,tsx}'
+      run: pnpm exec oxlint {staged_files}

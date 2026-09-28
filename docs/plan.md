@@ -101,7 +101,7 @@ Step 7 ran right after step 1, ahead of step 2, because `main.yml` failed on eve
    The disable comments in the test file became `oxlint-disable-next-line` with oxlint rule names, one of them `typescript/no-this-alias`. The ones that no longer suppressed anything are gone. No assertion changed. `tsconfig.eslint.json` was deleted, and with it its stale `*.config.js` include.
    `lint` only checks. `format` writes, and `format:check` checks without writing. `fix` runs `oxlint --fix && oxfmt && npx sort-package-json`. The root has `lint`, `format` and `format:check`. CI runs `pnpm lint` and `pnpm format:check`. The `pnpm lint`, `pnpm format` and `pnpm format:check` lines in `CONTRIBUTING.md` were added in this step.
    Recorded as a note only: `npx sort-package-json --check` flags `packages/main/package.json` for the order of `main`, `module` and `types`. That predates step 5. Running `pnpm fix` would reorder them.
-   michiharu plans to add lefthook later, so the format and the checks run before each commit. It is not a scheduled step.
+   michiharu plans to add lefthook later, so the format and the checks run before each commit. It is not a scheduled step. Added after phase 5. See the decisions of 2026-09-29.
 6. **React.** Move dev React to 18. Widen the peer range to include React 19, but only after CI runs the unit tests and the smoke test on React 18 and 19 in a matrix and both pass.
    The matrix goes in `ci.yml`.
    Done. Dev React went from 17.0.2 to 18.3.1, `@types/react` to 18.3.31 and `@types/react-dom` to 18.3.7. `@testing-library/react` went from 12.1.5 to 16.3.3, with `@testing-library/dom` 10.4.2 as its peer. 16 is the only line whose peer covers React 18 and 19. 13 to 15 accept `^18` only. No test file changed. `pnpm test` reports 162 passed on React 18 and on React 19.
@@ -500,6 +500,10 @@ Decided after phase 5 on 2026-09-29.
 - A separate `check-tag` job compares the tag with `version` first, so a wrong tag fails in seconds instead of after the CI run.
 - `publish` no longer runs `pnpm test`. `npm publish` still builds through `prepack`.
 - The workflows stay on `ubuntu-latest`, which moves to Ubuntu 26 from 2026-10-19. Draft #81 ran `ci.yml` and `docs.yml` on `ubuntu-26.04`, image version 20260920.143.1, in runs 36460228995 and 36460228890. Both legs passed 93 unit tests and 41 browser tests, and the docs build passed. There were no annotations. #81 was closed without a merge.
+- lefthook 2.1.14 runs a pre-commit hook from `lefthook.yml` at the root. It formats the staged files with oxfmt, stages the result, then lints the staged JS and TS files with oxlint. Each command runs from its package, so it reads that package's `.oxlintrc.json`. With a few staged files the hook took under 0.3 seconds. A staged `debugger` statement failed it.
+- The hook leaves out typecheck and the tests. They take seconds to minutes, and CI runs them on every PR.
+- Files outside the two packages, such as `docs/plan.md` and the workflows, are not formatted by the hook. `pnpm format:check` does not check them either.
+- `allowBuilds` sets `lefthook: true`. Its postinstall runs `lefthook install`, so `pnpm install` sets up the hook. It does nothing when `CI` is set.
 
 ## Open questions
 
