@@ -18,6 +18,11 @@ hero:
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
+import HomeDemo from '../../examples/HomeDemo';
+
+<div class="not-content">
+  <HomeDemo client:load />
+</div>
 
 <CardGrid>
   <Card title="Only visible cards render" icon="rocket">

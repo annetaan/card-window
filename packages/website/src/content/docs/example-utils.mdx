@@ -1,0 +1,13 @@
+---
+title: Example utils
+description: The helpers that the examples import.
+---
+
+import { Code } from '@astrojs/starlight/components';
+import sharedSource from '../../examples/shared.tsx?raw';
+
+The [examples](/card-window/examples/) import these helpers.
+Their styles use Starlight CSS variables to follow the theme of this site.
+In your app, pass `style` on to the root element of your card the same way `SampleCard` does.
+
+<Code code={sharedSource} lang="tsx" title="shared.tsx" />

@@ -21,7 +21,7 @@ export default defineConfig({
           typeDoc: { disableSources: true },
         }),
       ],
-      sidebar: [{ label: 'Guides', items: ['intro'] }, typeDocSidebarGroup],
+      sidebar: [{ label: 'Guides', items: ['intro', 'examples', 'example-utils'] }, typeDocSidebarGroup],
     }),
     react(),
   ],
