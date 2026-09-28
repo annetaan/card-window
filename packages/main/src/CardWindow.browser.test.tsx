@@ -391,3 +391,84 @@ describe('resize without loop errors', () => {
     }
   });
 });
+
+describe('loadMore reach', () => {
+  // 3 columns and a 330px view, so the reach is 330 + 200 = 530px. With one
+  // loading card, 5 cards take 2 rows (sizer 224px), 10 take 4 (440px), and
+  // 15 take 6 (656px), where the sentinel at 655px is out of reach. So
+  // loadMore runs at 5 and at 10 cards, and not at 15.
+  test('is called again after data grows while the end is still in reach, and stops when it is not', async () => {
+    const loadMore = vi.fn();
+    const App = () => {
+      const [data, setData] = React.useState(() => range(5));
+      loadMore.mockImplementation(() => setData((d) => range(d.length + 5)));
+      return (
+        <div data-testid="frame" style={{ width: 400, height: 330 }}>
+          <CardWindow cardRect={cardRect} data={data} loading={{ type: 'card', count: 1, LoadingComponent, loadMore }}>
+            {Card}
+          </CardWindow>
+        </div>
+      );
+    };
+    await render(<App />);
+    await expect.poll(() => loadMore.mock.calls.length).toBe(2);
+    await nextFrames();
+    await nextFrames();
+    expect(loadMore).toHaveBeenCalledTimes(2);
+  });
+
+  test('is not called again while the end stays in reach', async () => {
+    const loadMore = vi.fn();
+    const { scroller } = await renderCardWindow(400, 330, {
+      data: range(300),
+      loading: { type: 'card', count: 1, LoadingComponent, loadMore },
+    });
+    await expect.poll(() => columnCount(scroller)).toBe(3);
+    scroller.scrollTop = scroller.scrollHeight;
+    await expect.poll(() => loadMore.mock.calls.length).toBeGreaterThan(0);
+    const count = loadMore.mock.calls.length;
+    scroller.scrollTop -= 150;
+    await nextFrames();
+    await nextFrames();
+    expect(loadMore).toHaveBeenCalledTimes(count);
+  });
+
+  test('renders the loading row only when the last row is in range', async () => {
+    const { scroller } = await renderCardWindow(400, 330, {
+      data: range(300),
+      loading: { type: 'row', height: 50, LoadingComponent },
+    });
+    await expect.poll(() => columnCount(scroller)).toBe(3);
+    expect(scroller.querySelector('[data-loading]')).toBeNull();
+    scroller.scrollTop = scroller.scrollHeight;
+    await expect.poll(() => loadingInView(scroller)).toBe(true);
+  });
+});
+
+describe('loading row past the end', () => {
+  // A 150px view with no overscan and a 300px loading row. Scrolled to the
+  // bottom, the view is past the last card row, so the row range is empty. The
+  // loading row must still follow the last card row and stay inside the sizer:
+  // 9 cards are 3 rows, so the sizer is 8 + 3 * 108 + 300 + 8 = 640px, and the
+  // loading row's top is 8 + 3 * 108 = 332px.
+  test.each([
+    [9, 640, 332],
+    [0, 316, 16],
+  ])('with %i cards keeps the scroll height and the row in place', async (count, height, top) => {
+    const { scroller } = await renderCardWindow(400, 150, {
+      data: range(count),
+      overScanPx: 0,
+      loading: { type: 'row', height: 300, LoadingComponent },
+    });
+    await expect.poll(() => scroller.scrollHeight).toBe(height);
+    for (let i = 0; i < 4; i += 1) {
+      scroller.scrollTop = scroller.scrollHeight;
+      await nextFrames();
+    }
+    expect(scroller.scrollHeight).toBe(height);
+    const el = scroller.querySelector<HTMLElement>('[data-loading]');
+    if (!el) throw new Error('the loading row is not rendered');
+    const offsetTop = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+    expect(offsetTop).toBeCloseTo(top, 0);
+  });
+});

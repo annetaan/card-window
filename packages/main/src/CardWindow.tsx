@@ -63,7 +63,8 @@ export type LoadingCardComponentProps = {
  *
  * #### Description of `loadMore`
  *
- * `loadMore` is called when `LoadingCard.Component` is rendered.
+ * `loadMore` is called when the end of the list comes within `overScanPx` of the view,
+ * and again after `data` grows while the end is still that close. It is not called on every render.
  */
 export type LoadingCard = {
   type: 'card';
@@ -71,7 +72,10 @@ export type LoadingCard = {
   count?: number;
   /** `LoadingCard.Component` is rendered after the last card. */
   LoadingComponent: React.ComponentType<LoadingCardComponentProps>;
-  /** `loadMore` is called when `LoadingCard.Component` is rendered. */
+  /**
+   * `loadMore` is called when the end of the list comes within `overScanPx` of the view,
+   * and again after `data` grows while the end is still that close. It is not called on every render.
+   */
   loadMore?(): void;
 };
 
@@ -82,20 +86,24 @@ export type LoadingRowComponentProps = {
 };
 
 /**
- * LoadingRow(`type: 'row'`) displays the loading component in the center next to the last row.
+ * LoadingRow(`type: 'row'`) displays the loading component in the center below the last row.
  * Missing description of function-type is [bug](https://github.com/tgreyuk/typedoc-plugin-markdown/issues/281).
  *
  * #### Description of `loadMore`
  *
- * `loadMore` is called when `LoadingRow.Component` is rendered.
+ * `loadMore` is called when the end of the list comes within `overScanPx` of the view,
+ * and again after `data` grows while the end is still that close. It is not called on every render.
  */
 export type LoadingRow = {
   type: 'row';
   /** `height` is the height of `LoadingRow.Component`. */
   height: number;
-  /** `LoadingRow.Component` is rendered in the center next to the last row. */
+  /** `LoadingRow.Component` is rendered in the center below the last row. */
   LoadingComponent: React.ComponentType<LoadingRowComponentProps>;
-  /** `loadMore` is called when `LoadingRow.Component` is rendered. */
+  /**
+   * `loadMore` is called when the end of the list comes within `overScanPx` of the view,
+   * and again after `data` grows while the end is still that close. It is not called on every render.
+   */
   loadMore?(): void;
 };
 export type ScrollDirection = 'forward' | 'backward';
@@ -296,6 +304,7 @@ type Latest = {
   overScanPx: number;
   thresholdOfVisible: number;
   onScroll: ((props: OnScrollProps) => void) | undefined;
+  loadMore: (() => void) | undefined;
 };
 
 const sameRange = (a: [number, number], b: [number, number]) => a[0] === b[0] && a[1] === b[1];
@@ -344,12 +353,23 @@ const CardWindow = React.forwardRef<HTMLDivElement, CardWindowProps>((props, par
     paddingLeft: spacing.left,
     paddingRight: spacing.right,
     boxSizing: 'border-box',
+    // The containing block of the sentinel.
+    position: 'relative',
     height: scrollContainerHeight,
   };
   const rows = getRowRange(offset, viewHeight, overScanPx, rowCount, card, spacing);
-  const [start, stop] = getIndexRange(rows, cols, length + loadingCards);
+  // A loading row taller than the reach leaves the range empty past the last card row. The loading row follows
+  // the window, so start the window at the last card row to keep the loading row inside the sizer.
+  // The scroll handler and the after-commit effect keep comparing the raw rows.
+  const shownRows: [number, number] =
+    loading?.type === 'row' && rows[0] > rowCount - 1 ? [Math.max(rowCount - 1, 0), rows[1]] : rows;
+  const [start, stop] = getIndexRange(shownRows, cols, length + loadingCards);
+  const lastRowInRange = rowCount === 0 || rows[1] >= rowCount - 1;
+  // Before the first measurement the sizer is 0px tall, so a sentinel would sit in view even for a long list.
+  const hasSentinel = cols > 0 && loading?.loadMore !== undefined;
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const windowStyle: CSSProperties = {
-    transform: `translateY(${spacing.top + rows[0] * (card.height + spacing.y)}px)`,
+    transform: `translateY(${spacing.top + shownRows[0] * (card.height + spacing.y)}px)`,
   };
   // The browser decides the column count. CardWindow reads it back from the resolved tracks.
   const gridStyle: CSSProperties = {
@@ -409,6 +429,7 @@ const CardWindow = React.forwardRef<HTMLDivElement, CardWindowProps>((props, par
       overScanPx,
       thresholdOfVisible,
       onScroll,
+      loadMore: loading?.loadMore,
     };
     // Only the scroll container is observed, so a sizer narrowed by CardWindow's own props shows up here,
     // after the commit that narrowed it. Observing the sizer would risk a ResizeObserver loop.
@@ -468,11 +489,21 @@ const CardWindow = React.forwardRef<HTMLDivElement, CardWindowProps>((props, par
     };
   }, []);
 
+  // Recreated when data.length changes: a new observer reports the sentinel's state again, so a list that
+  // still ends within reach keeps loading. Otherwise it fires only when the sentinel enters the reach.
   useEffect(() => {
-    if (scrollContainerHeight !== 0 && loading?.loadMore && start <= length - 1 && length - 1 < stop) {
-      loading.loadMore();
-    }
-  }, [scrollContainerHeight, loading?.loadMore, start, stop, length]);
+    const el = scrollerRef.current;
+    const sentinel = sentinelRef.current;
+    if (!hasSentinel || !el || !sentinel) return undefined;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) latest.current?.loadMore?.();
+      },
+      { root: el, rootMargin: `${overScanPx}px 0px` },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasSentinel, overScanPx, length]);
 
   return (
     <div ref={scrollerRef} className={root.className} style={rootStyle}>
@@ -501,12 +532,19 @@ const CardWindow = React.forwardRef<HTMLDivElement, CardWindowProps>((props, par
               ),
             )}
           </div>
-          {loading?.type === 'row' && (
+          {loading?.type === 'row' && cols > 0 && lastRowInRange && (
             <div style={{ width: '100%', paddingTop: spacing.y, display: 'flex', justifyContent: 'center' }}>
               <loading.LoadingComponent style={{ height: loading.height }} />
             </div>
           )}
         </div>
+        {hasSentinel && (
+          <div
+            ref={sentinelRef}
+            aria-hidden="true"
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 1, pointerEvents: 'none' }}
+          />
+        )}
       </div>
     </div>
   );
