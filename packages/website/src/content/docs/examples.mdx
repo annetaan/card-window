@@ -1,0 +1,180 @@
+---
+title: Examples
+description: Live examples of CardWindow, from the minimal usage to styling, card positions, columns, overscanning, scroll events and infinite loading.
+---
+
+import Example from '../../components/Example.astro';
+import Minimal from '../../examples/Minimal';
+import minimalSource from '../../examples/Minimal.tsx?raw';
+import RootStyle from '../../examples/RootStyle';
+import rootStyleSource from '../../examples/RootStyle.tsx?raw';
+import ContainerStyle from '../../examples/ContainerStyle';
+import containerStyleSource from '../../examples/ContainerStyle.tsx?raw';
+import CardPositions from '../../examples/CardPositions';
+import cardPositionsSource from '../../examples/CardPositions.tsx?raw';
+import AutoColumns from '../../examples/AutoColumns';
+import autoColumnsSource from '../../examples/AutoColumns.tsx?raw';
+import CapColumns from '../../examples/CapColumns';
+import capColumnsSource from '../../examples/CapColumns.tsx?raw';
+import OverScan from '../../examples/OverScan';
+import overScanSource from '../../examples/OverScan.tsx?raw';
+import ScrollEvent from '../../examples/ScrollEvent';
+import scrollEventSource from '../../examples/ScrollEvent.tsx?raw';
+import ScrollRef from '../../examples/ScrollRef';
+import scrollRefSource from '../../examples/ScrollRef.tsx?raw';
+import LoadingCards from '../../examples/LoadingCards';
+import loadingCardsSource from '../../examples/LoadingCards.tsx?raw';
+import LoadingRow from '../../examples/LoadingRow';
+import loadingRowSource from '../../examples/LoadingRow.tsx?raw';
+
+The examples use `SampleCard`, `LoadingCard`, `Toolbar` and `useSelect` from [Example utils](/card-window/example-utils/).
+
+## Minimal usage
+
+CardWindow renders only the part of a large data set that fills the view.
+This addresses some common performance bottlenecks:
+
+- It reduces the work, and the time, needed to render the initial view and to process updates.
+- It reduces the memory footprint by not allocating DOM nodes that nobody sees.
+
+<Example code={minimalSource} title="Minimal.tsx">
+  <Minimal client:load />
+</Example>
+
+### Required properties
+
+CardWindow has three required properties. The type parameter is `T extends any[]`.
+
+| Name       | Type                                                                                | Description                                                      |
+| :--------- | :---------------------------------------------------------------------------------- | :--------------------------------------------------------------- |
+| `data`     | `T`                                                                                 | An array. CardWindow passes it to the `children` component.      |
+| `cardRect` | [`Rect`](/card-window/api/type-aliases/rect/)                                       | The width and height of every card, in px.                       |
+| `children` | `React.ComponentType<`[`CardProps<T>`](/card-window/api/type-aliases/cardprops/)`>` | The component that renders one card. It receives `CardProps<T>`. |
+
+## Styling
+
+### `root`
+
+`root` is passed to the root element of CardWindow, which is the scroll container.
+By default, `root.style` has these values:
+
+- `width`: `100%`
+- `minWidth`: `cardRect.width`
+- `height`: `100%`
+- `scrollbarGutter`: `stable`
+
+`root.style` overrides each of them. `overflow` stays `auto`, and `root.style` cannot override it.
+
+<Example code={rootStyleSource} title="RootStyle.tsx">
+  <RootStyle client:load />
+</Example>
+
+### `container`
+
+`container` is passed to the element inside the scroll container that holds the grid and sets the scroll height.
+`container.style` cannot override `width`, `height`, `paddingLeft`, `paddingRight`, `boxSizing` and `position`.
+
+<Example code={containerStyleSource} title="ContainerStyle.tsx">
+  <ContainerStyle client:load />
+</Example>
+
+## Card positions
+
+`justifyContent` and `spacing` place the cards.
+
+`justifyContent` goes straight to CSS Grid `justify-content`.
+`start` and `end` follow the writing direction, while `left` and `right` do not.
+`stretch` grows the columns to fill the width.
+Whatever the value, the last row always lines up under the columns above it.
+
+`spacing` sets the gaps between the cards (`x`, `y`) and the space at the edges (`top`, `bottom`, `left`, `right`), 8px each by default.
+
+<Example code={cardPositionsSource} title="CardPositions.tsx">
+  <CardPositions client:load />
+</Example>
+
+## Columns
+
+### Automatic columns
+
+The browser fits as many columns as the width allows, and CardWindow follows the width through `ResizeObserver`.
+Set the size of the element around CardWindow with CSS, and the columns adjust.
+
+<Example code={autoColumnsSource} title="AutoColumns.tsx">
+  <AutoColumns client:load />
+</Example>
+
+### Capping the columns
+
+To cap the columns, cap the width of the element around CardWindow.
+For N columns that width is `spacing.left + spacing.right + N × cardRect.width + (N − 1) × spacing.x`, plus the scrollbar width where scrollbars are classic.
+The example measures that scrollbar gutter through `ref`, which receives the scroll container element.
+It goes well with `justifyContent="stretch"`.
+
+<Example code={capColumnsSource} title="CapColumns.tsx">
+  <CapColumns client:load />
+</Example>
+
+## Overscanning
+
+`overScanPx` renders cards outside of the visible area. It helps for two reasons:
+
+- Overscanning by one row allows the tab key to focus on the next item, which is not yet visible.
+- Overscanning slightly can reduce or prevent a flash of empty space when the user starts scrolling.
+
+Overscanning too much can hurt performance. By default, CardWindow overscans by 200px.
+
+Open the element inspector of your browser and scroll to see the cards come and go.
+With a larger `overScanPx`, more rows stay mounted.
+
+<Example code={overScanSource} title="OverScan.tsx">
+  <OverScan client:load />
+</Example>
+
+## Scroll event
+
+`onScroll` is called at most once per animation frame after a scroll.
+It receives [`OnScrollProps`](/card-window/api/type-aliases/onscrollprops/): `direction`, `offset`, `updateWasRequested` and `indexesOfVisible`.
+`updateWasRequested` is true when the scroll moved the rendered rows, whether or not code started the scroll.
+`indexesOfVisible` lists the cards in the rows that show more than `thresholdOfVisible` of the card height, 0.5 by default.
+
+<Example code={scrollEventSource} title="ScrollEvent.tsx">
+  <ScrollEvent client:load />
+</Example>
+
+## Scroll container ref
+
+`ref` receives the scroll container element, so `useRef<HTMLDivElement>(null)` fits it.
+`scrollTo`, `scrollTop` and the rest of the element work on it directly.
+
+<Example code={scrollRefSource} title="ScrollRef.tsx">
+  <ScrollRef client:load />
+</Example>
+
+## Infinite loading
+
+You manage the pending state yourself.
+Set `loadMore` only while you can accept a call.
+
+`loadMore` is called when the end of the list comes within `overScanPx` of the view, and again after `data` grows while the end is still that close.
+It is not called on every render.
+
+[`Loading`](/card-window/api/type-aliases/loading/) has two types, `card` and `row`.
+
+### type: `'card'`
+
+The loading cards follow the last card in the grid.
+`count` sets how many, 10 by default.
+
+<Example code={loadingCardsSource} title="LoadingCards.tsx">
+  <LoadingCards client:load />
+</Example>
+
+### type: `'row'`
+
+`height` is required.
+The loading row renders once, centered below the last row, and only when the last row is in range.
+
+<Example code={loadingRowSource} title="LoadingRow.tsx">
+  <LoadingRow client:load />
+</Example>

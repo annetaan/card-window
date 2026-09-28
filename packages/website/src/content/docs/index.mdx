@@ -1,0 +1,40 @@
+---
+title: card-window
+description: A React component that renders only the cards of a large data set that fill the view.
+template: splash
+hero:
+  tagline: It renders only the part of a large data set that fills the view.
+  actions:
+    - text: Get started
+      link: /card-window/intro/
+      icon: right-arrow
+    - text: API reference
+      link: /card-window/api/readme/
+      variant: secondary
+    - text: GitHub
+      link: https://github.com/annetaan/card-window
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+import HomeDemo from '../../examples/HomeDemo';
+
+<div class="not-content">
+  <HomeDemo client:load />
+</div>
+
+<CardGrid>
+  <Card title="Only visible cards render" icon="rocket">
+    CardWindow mounts the cards in the rows that fill the view, plus a margin you set with `overScanPx`. Ten thousand
+    items mount about as many elements as one screenful.
+  </Card>
+  <Card title="CSS Grid decides the columns" icon="puzzle">
+    Give each card a width and a height. The browser works out how many columns fit, and the count follows the frame as
+    it resizes.
+  </Card>
+  <Card title="Inspired by react-window" icon="open-book">
+    The idea comes from Brian Vaughn's react-window, applied to a grid of equal cards that wraps to the width of its
+    frame.
+  </Card>
+</CardGrid>

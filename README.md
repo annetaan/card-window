@@ -24,7 +24,7 @@ yarn add @annetaan/card-window
 
 ## Usage
 
-Learn more at [annetaan.github.io/card-window/](https://annetaan.github.io/card-window/). The site still describes 1.x until it is rebuilt.
+Learn more at [annetaan.github.io/card-window/](https://annetaan.github.io/card-window/).
 
 ```tsx
 import * as React from 'react';

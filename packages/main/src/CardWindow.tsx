@@ -44,10 +44,10 @@ export type JustifyContent =
 /** There are two rendering types for the infinite loading feature. */
 export type Loading = LoadingCard | LoadingRow;
 
-/** CardWindow provides `LoadingCard.Component` with this props. */
+/** CardWindow provides `LoadingCard.LoadingComponent` with this props. */
 export type LoadingCardComponentProps = {
   /**
-   * `style` should be passed to the root of `LoadingCard.Component`.
+   * `style` should be passed to the root of `LoadingCard.LoadingComponent`.
    * The grid cell sizes the card, so it is empty today, but pass it anyway.
    */
   style: CSSProperties;
@@ -57,20 +57,12 @@ export type LoadingCardComponentProps = {
   col: number;
 };
 
-/**
- * LoadingCard(`type: 'card'`) displays the loading component after the last card.
- * Missing description of function-type is [bug](https://github.com/tgreyuk/typedoc-plugin-markdown/issues/281).
- *
- * #### Description of `loadMore`
- *
- * `loadMore` is called when the end of the list comes within `overScanPx` of the view,
- * and again after `data` grows while the end is still that close. It is not called on every render.
- */
+/** `type: 'card'` renders `LoadingComponent` as `count` cards after the last card. */
 export type LoadingCard = {
   type: 'card';
   /** `LoadingCard.count` is the number of loading cards to display. */
   count?: number;
-  /** `LoadingCard.Component` is rendered after the last card. */
+  /** `LoadingCard.LoadingComponent` is rendered after the last card. */
   LoadingComponent: React.ComponentType<LoadingCardComponentProps>;
   /**
    * `loadMore` is called when the end of the list comes within `overScanPx` of the view,
@@ -79,26 +71,18 @@ export type LoadingCard = {
   loadMore?(): void;
 };
 
-/** CardWindow provides `LoadingRow.Component` with this props. */
+/** CardWindow provides `LoadingRow.LoadingComponent` with this props. */
 export type LoadingRowComponentProps = {
-  /** `style` should be passed to the root of `LoadingRow.Component`. */
+  /** `style` should be passed to the root of `LoadingRow.LoadingComponent`. */
   style: CSSProperties;
 };
 
-/**
- * LoadingRow(`type: 'row'`) displays the loading component in the center below the last row.
- * Missing description of function-type is [bug](https://github.com/tgreyuk/typedoc-plugin-markdown/issues/281).
- *
- * #### Description of `loadMore`
- *
- * `loadMore` is called when the end of the list comes within `overScanPx` of the view,
- * and again after `data` grows while the end is still that close. It is not called on every render.
- */
+/** `type: 'row'` renders `LoadingComponent` once, centered below the last row, when the last row is in range. */
 export type LoadingRow = {
   type: 'row';
-  /** `height` is the height of `LoadingRow.Component`. */
+  /** `height` is the height of `LoadingRow.LoadingComponent`. */
   height: number;
-  /** `LoadingRow.Component` is rendered in the center below the last row. */
+  /** `LoadingRow.LoadingComponent` is rendered in the center below the last row. */
   LoadingComponent: React.ComponentType<LoadingRowComponentProps>;
   /**
    * `loadMore` is called when the end of the list comes within `overScanPx` of the view,
@@ -106,7 +90,9 @@ export type LoadingRow = {
    */
   loadMore?(): void;
 };
+/** Whether the view moved down (`forward`) or up (`backward`) since the previous animation frame. */
 export type ScrollDirection = 'forward' | 'backward';
+/** What `onScroll` receives, at most once per animation frame. */
 export type OnScrollProps = {
   /** `direction` is either "forward" or "backward". */
   direction: ScrollDirection;
@@ -114,19 +100,14 @@ export type OnScrollProps = {
   offset: number;
   /** `updateWasRequested` is true when this scroll changed the rendered row range. */
   updateWasRequested: boolean;
-  /**  */
+  /**
+   * The indexes of the cards in the rows that show more than `thresholdOfVisible` of the card height.
+   * Loading cards are not included.
+   */
   indexesOfVisible: number[];
 };
 
-/**
- * This props is for CardWindow.
- * Missing description of function-type is [bug](https://github.com/tgreyuk/typedoc-plugin-markdown/issues/281).
- *
- * #### Description of `getKey`
- *
- * If you can use an id instead of array index for [key](https://reactjs.org/docs/lists-and-keys.html#keys),
- * define a `getKey` function.
- */
+/** The props of `CardWindow`. `T` is the type of `data`. */
 export type CardWindowProps<T extends any[] = any[]> = {
   /** `data` is an array. CardWindow passes data to `CardWindow.children` component. */
   data: T;
@@ -183,6 +164,11 @@ export type CardWindowProps<T extends any[] = any[]> = {
   onScroll?: (props: OnScrollProps) => void;
 };
 
+/**
+ * The integers from `_start` up to `_end`, exclusive. With one argument it counts from 0: `range(3)` is `[0, 1, 2]`.
+ * @param _start The first integer, or the end when `_end` is omitted.
+ * @param _end The end, exclusive.
+ */
 export const range = (_start: number, _end?: number): number[] => {
   const start = _end === undefined ? 0 : _start;
   const end = _end ?? _start;
@@ -330,6 +316,10 @@ type Latest = {
 
 const sameRange = (a: [number, number], b: [number, number]) => a[0] === b[0] && a[1] === b[1];
 
+/**
+ * Renders the cards of `data` that fall in the rows filling its scroll container, plus `overScanPx` above and below.
+ * The `ref` receives the scroll container element.
+ */
 const CardWindow = React.forwardRef<HTMLDivElement, CardWindowProps>((props, parentRef) => {
   const {
     data,
