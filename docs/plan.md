@@ -505,6 +505,15 @@ Decided after phase 5 on 2026-09-29.
 - Files outside the two packages, such as `docs/plan.md` and the workflows, are not formatted by the hook. `pnpm format:check` does not check them either.
 - `allowBuilds` sets `lefthook: true`. Its postinstall runs `lefthook install`, so `pnpm install` sets up the hook. It does nothing when `CI` is set.
 
+Decided for the generic CardWindow on 2026-09-29.
+
+- `CardWindow` is typed as a generic function over `T`, the array type of `data`. The cast reads `React.forwardRef(CardWindowRender) as <T extends any[] = any[]>(props: CardWindowProps<T> & React.RefAttributes<HTMLDivElement>) => React.ReactElement | null`. `data` flows into `children` (`CardProps<T>`) and `getKey`. `T` stays the array type, because the element type would break `CardProps<Item[]>`.
+- The plain signature drops the `ForwardRefExoticComponent` members from the type (`$$typeof`, `displayName`, `defaultProps`, `propTypes`). Assigning `CardWindow` to `ForwardRefExoticComponent<…>` no longer type-checks. michiharu accepted this for a minor release after the design review, over keeping them with `Omit<…, never>`. There is no runtime change.
+- The next release is 2.1.0, a minor, in a separate release PR, as for 1.11.0 and 2.0.0. Its notes name two changes. Code whose card type does not accept `data` now fails to type-check. The `ForwardRefExoticComponent` assignability is gone.
+- The type tests live in `src/CardWindow.test-d.tsx`. `pnpm typecheck` checks them on the React 18 and 19 legs, and Vitest does not collect them. Positive cases assert with `expectTypeOf`, because `tsconfig.json` does not set `noImplicitAny`.
+- `smoke/types.tsx` checks the inference with `@ts-expect-error` under `strict`, against the packed tarball. A manual `npm test` in `smoke` against registry `latest` fails until 2.1.0 is published. `use:local` is the way to test an unpublished build.
+- `ItemProps.Children` is `React.ComponentType<CardProps<any>>`. Passing a `CardProps<T>` card to `Item` still type-checks under `strictFunctionTypes`, which `strict` turns on and TypeScript 6 makes the default.
+
 ## Open questions
 
 - Each layout in the scroll scenarios costs 1.4 to 1.8 times what it did in 1.11.0, for the same 185 layouts. Not traced.

@@ -51,6 +51,10 @@ CardWindow has three required properties. The type parameter is `T extends any[]
 | `cardRect` | [`Rect`](/card-window/api/type-aliases/rect/)                                       | The width and height of every card, in px.                       |
 | `children` | `React.ComponentType<`[`CardProps<T>`](/card-window/api/type-aliases/cardprops/)`>` | The component that renders one card. It receives `CardProps<T>`. |
 
+CardWindow infers `T` from `data`.
+An inline `children` component and `getKey` receive `data` as that type, without annotations.
+A card component typed as `CardProps<T>` for a `T` that `data` does not fit is a type error.
+
 ## Styling
 
 ### `root`
