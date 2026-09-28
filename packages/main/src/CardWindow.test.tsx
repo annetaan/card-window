@@ -156,7 +156,7 @@ describe('getRowRange(offset, viewHeight, margin, rowCount, card, spacing)', () 
   const byCase = ({ offset, viewHeight, margin, rowCount, top, expected }) =>
     expect(getRowRange(offset, viewHeight, margin, rowCount, card, spacing(top))).toEqual(expected);
 
-  describe('render range with overscan', () =>
+  describe('with an overscan margin', () =>
     test.each`
       offset  | viewHeight | margin | rowCount | top  | expected
       ${1108} | ${330}     | ${200} | ${100}   | ${8} | ${[8, 15]}

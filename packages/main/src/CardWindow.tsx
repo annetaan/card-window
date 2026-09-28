@@ -112,7 +112,7 @@ export type OnScrollProps = {
   direction: ScrollDirection;
   /** `offset` is a number. */
   offset: number;
-  /** `updateWasRequested` is a boolean. */
+  /** `updateWasRequested` is true when this scroll changed the rendered row range. */
   updateWasRequested: boolean;
   /**  */
   indexesOfVisible: number[];
