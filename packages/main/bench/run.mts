@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { build, preview } from 'vite';
 
-type RunResult = { frameIntervals: number[]; domNodes: number };
+type RunResult = { frameIntervals: number[]; domNodes: number; commits: number };
 type BenchWindow = { __bench: { ready: Promise<void>; cardRenders: number; run(): Promise<RunResult> } };
 type Row = Record<(typeof columns)[number]['key'], number>;
 
@@ -29,6 +29,7 @@ const columns = [
   { key: 'TaskDuration', label: 'Task ms', ms: true },
   { key: 'LayoutCount', label: 'Layouts', ms: false },
   { key: 'RecalcStyleCount', label: 'Style recalcs', ms: false },
+  { key: 'commits', label: 'Commits', ms: false },
   { key: 'cardRenders', label: 'Card renders', ms: false },
   { key: 'domNodes', label: 'DOM nodes', ms: false },
   { key: 'p95Frame', label: 'p95 frame ms', ms: true },
@@ -105,6 +106,7 @@ try {
       for (const name of cdpMetrics) sample[name as keyof Row] = delta(name) * 1000;
       for (const name of cdpCounts) sample[name as keyof Row] = delta(name);
       sample.cardRenders = rendersAfter - rendersBefore;
+      sample.commits = result.commits;
       sample.domNodes = result.domNodes;
       sample.p95Frame = percentile(result.frameIntervals, 95);
       samples.push(sample);

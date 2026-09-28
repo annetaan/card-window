@@ -6,7 +6,7 @@ import { type CardProps, CardWindow, range } from '../src';
 // The page that bench/run.mts drives. It uses only props that exist in both
 // 1.11.0 and 2.0, so the same page measures both.
 
-type RunResult = { frameIntervals: number[]; domNodes: number };
+type RunResult = { frameIntervals: number[]; domNodes: number; commits: number };
 
 declare global {
   interface Window {
@@ -91,8 +91,23 @@ const steps = (s: Scenario): Array<() => void> => {
   return [];
 };
 
+// Counts the tasks that changed the DOM. React commits synchronously, so a scroll-driven commit gives one
+// callback, but commits chained in one task (a layout-effect update after a commit) share one.
+const countCommits = () => {
+  let commits = 0;
+  const observer = new MutationObserver(() => {
+    commits += 1;
+  });
+  observer.observe(frame, { childList: true, subtree: true, attributes: true });
+  return () => {
+    observer.disconnect();
+    return commits;
+  };
+};
+
 const run = async (): Promise<RunResult> => {
   const frameIntervals: number[] = [];
+  const stopCounting = countCommits();
   if (scenario === 'mount') {
     mount();
     await waitForCards(frameIntervals);
@@ -111,7 +126,7 @@ const run = async (): Promise<RunResult> => {
   await nextFrame();
   const scroller = frame.firstElementChild;
   const domNodes = scroller ? scroller.querySelectorAll('*').length : 0;
-  return { frameIntervals, domNodes };
+  return { frameIntervals, domNodes, commits: stopCounting() };
 };
 
 const ready = async () => {

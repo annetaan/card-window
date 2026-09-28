@@ -472,3 +472,27 @@ describe('loading row past the end', () => {
     expect(offsetTop).toBeCloseTo(top, 0);
   });
 });
+
+describe('scroll commits', () => {
+  // The rows are 108px apart. Keyed on both ends, the render range would move
+  // twice per row, as a row enters at the bottom and as a row leaves at the top.
+  test('commits at most once per row while scrolling', async () => {
+    const { scroller } = await renderCardWindow(400, 330, { data: range(300) });
+    await expect.poll(() => columnCount(scroller)).toBe(3);
+    let commits = 0;
+    const observer = new MutationObserver(() => {
+      commits += 1;
+    });
+    observer.observe(scroller, { childList: true, subtree: true, attributes: true });
+    try {
+      // 36 steps of 30px are 1,080px, 10 rows.
+      for (let i = 0; i < 36; i += 1) {
+        scroller.scrollTop += 30;
+        await nextFrames();
+      }
+    } finally {
+      observer.disconnect();
+    }
+    expect(commits).toBeLessThanOrEqual(11);
+  });
+});

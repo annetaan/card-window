@@ -241,6 +241,26 @@ const getRowRange = (
   return [first, last];
 };
 
+/**
+ * The rows to render. It starts at the first row of `getRowRange` with `overScanPx` as the margin and always spans
+ * enough rows to cover that range's last row, so it moves only when its first row does: one commit per row while
+ * scrolling. Keying on both ends would commit twice per row, once as a row enters and once as a row leaves.
+ */
+const getRenderRange = (
+  offset: number,
+  viewHeight: number,
+  overScanPx: number,
+  rowCount: number,
+  card: Rect,
+  spacing: Spacing,
+): [number, number] => {
+  const [first] = getRowRange(offset, viewHeight, overScanPx, rowCount, card, spacing);
+  // At most this many rows intersect a reach of viewHeight + 2 * overScanPx.
+  const span = Math.ceil((viewHeight + 2 * overScanPx + card.height) / (card.height + spacing.y));
+  const last = Math.min(rowCount - 1, first + span - 1);
+  return [Math.min(first, last + 1), last];
+};
+
 /** The card indexes `[start, stop)` of the rows `rows`, with `count` cards and loading cards in all. */
 const getIndexRange = (rows: [number, number], cols: number, count: number): [number, number] => {
   if (cols === 0 || rows[1] < rows[0]) return [0, 0];
@@ -258,6 +278,7 @@ export const functions = {
   getScrollContainerHeight,
   getLastRowFromLength,
   getRowRange,
+  getRenderRange,
   getIndexRange,
   getNextOffset,
 };
@@ -357,7 +378,7 @@ const CardWindow = React.forwardRef<HTMLDivElement, CardWindowProps>((props, par
     position: 'relative',
     height: scrollContainerHeight,
   };
-  const rows = getRowRange(offset, viewHeight, overScanPx, rowCount, card, spacing);
+  const rows = getRenderRange(offset, viewHeight, overScanPx, rowCount, card, spacing);
   // A loading row taller than the reach leaves the range empty past the last card row. The loading row follows
   // the window, so start the window at the last card row to keep the loading row inside the sizer.
   // The scroll handler and the after-commit effect keep comparing the raw rows.
@@ -442,7 +463,7 @@ const CardWindow = React.forwardRef<HTMLDivElement, CardWindowProps>((props, par
     // After a resize or a data change, derive the range from the real scrollTop again.
     const el = scrollerRef.current;
     if (!el) return;
-    const next = getRowRange(el.scrollTop, viewHeight, overScanPx, rowCount, card, spacing);
+    const next = getRenderRange(el.scrollTop, viewHeight, overScanPx, rowCount, card, spacing);
     if (!sameRange(next, rows)) setOffset(el.scrollTop);
   });
 
@@ -455,7 +476,7 @@ const CardWindow = React.forwardRef<HTMLDivElement, CardWindowProps>((props, par
       const current = latest.current;
       if (!current) return;
       const scrollTop = el.scrollTop;
-      const next = getRowRange(
+      const next = getRenderRange(
         scrollTop,
         current.viewHeight,
         current.overScanPx,

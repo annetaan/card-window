@@ -8,7 +8,8 @@ import { describe, expect, test } from 'vitest';
 
 import CardWindow, { CardProps, Loading, Rect, Spacing, functions, range } from './CardWindow';
 
-const { getScrollContainerHeight, getLastRowFromLength, getRowRange, getIndexRange, getNextOffset } = functions;
+const { getScrollContainerHeight, getLastRowFromLength, getRowRange, getRenderRange, getIndexRange, getNextOffset } =
+  functions;
 
 describe('range', () => {
   describe('range(stop)', () => {
@@ -198,6 +199,40 @@ describe('getRowRange(offset, viewHeight, margin, rowCount, card, spacing)', () 
       const [first, last] = getRowRange(1108, 100, -100, 100, card, spacing(8));
       expect(last).toBeLessThan(first);
     });
+  });
+});
+
+describe('getRenderRange(offset, viewHeight, overScanPx, rowCount, card, spacing)', () => {
+  const card: Rect = { width: 100, height: 100 };
+  const spacing: Spacing = { x: 8, y: 8, top: 8, bottom: 8, left: 8, right: 8 };
+  const offsets = range(5001);
+
+  test('covers every row getRowRange returns', () => {
+    for (const offset of offsets) {
+      const [first, last] = getRowRange(offset, 330, 200, 100, card, spacing);
+      const [renderFirst, renderLast] = getRenderRange(offset, 330, 200, 100, card, spacing);
+      expect(renderFirst).toBe(first);
+      expect(renderLast).toBeGreaterThanOrEqual(last);
+    }
+  });
+
+  test('changes only when its first row changes', () => {
+    let prev = getRenderRange(0, 330, 200, 100, card, spacing);
+    for (const offset of offsets.slice(1)) {
+      const next = getRenderRange(offset, 330, 200, 100, card, spacing);
+      expect(next[1] !== prev[1] || next[0] !== prev[0]).toBe(next[0] !== prev[0]);
+      prev = next;
+    }
+  });
+
+  test('clamps the last row to rowCount - 1', () => {
+    expect(getRenderRange(10500, 330, 200, 100, card, spacing)).toEqual([95, 99]);
+    expect(getRenderRange(0, 330, 200, 2, card, spacing)).toEqual([0, 1]);
+  });
+
+  test('rowCount 0 gives an empty range', () => {
+    const [first, last] = getRenderRange(0, 330, 200, 0, card, spacing);
+    expect(last).toBeLessThan(first);
   });
 });
 
