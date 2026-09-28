@@ -78,6 +78,23 @@ const loadingInView = (scroller: HTMLElement) => {
   return rect.bottom > view.top && rect.top < view.bottom;
 };
 
+// Gives a root with the classic-scrollbar class a 15px scrollbar on every
+// platform, and collects window errors while run is in progress.
+const withClassicScrollbar = async (run: (errors: string[]) => Promise<void>) => {
+  const style = document.createElement('style');
+  style.textContent = '.classic-scrollbar::-webkit-scrollbar { width: 15px; }';
+  document.head.appendChild(style);
+  const errors: string[] = [];
+  const onError = (e: ErrorEvent) => errors.push(e.message);
+  window.addEventListener('error', onError);
+  try {
+    await run(errors);
+  } finally {
+    window.removeEventListener('error', onError);
+    style.remove();
+  }
+};
+
 describe('columns', () => {
   test.each([
     [180, 1],
@@ -250,21 +267,6 @@ describe('classic scrollbar', () => {
   // also means the scrollbar showing up does not resize the observed content
   // box, which with a visible classic scrollbar used to fire a window error,
   // "ResizeObserver loop completed with undelivered notifications".
-  const withClassicScrollbar = async (run: (errors: string[]) => Promise<void>) => {
-    const style = document.createElement('style');
-    style.textContent = '.classic-scrollbar::-webkit-scrollbar { width: 15px; }';
-    document.head.appendChild(style);
-    const errors: string[] = [];
-    const onError = (e: ErrorEvent) => errors.push(e.message);
-    window.addEventListener('error', onError);
-    try {
-      await run(errors);
-    } finally {
-      window.removeEventListener('error', onError);
-      style.remove();
-    }
-  };
-
   test.each([
     [180, 1],
     [280, 2],
@@ -325,12 +327,22 @@ describe('justifyContent start and end', () => {
 });
 
 describe('space-evenly column count', () => {
-  // The content is 324px, and auto-fill fits floor((324 + 8) / 108) = 3 columns.
-  // 1.11.0 kept a gap on both outer sides and fit only 2.
-  test('340px wide fits 3 columns, as grid auto-fill does', async () => {
-    const { scroller } = await renderCardWindow(340, 300, { data: range(100) });
-    await expect.poll(() => columnCount(scroller)).toBe(3);
-  });
+  // 1.11.0 fit 2 columns and auto-fill fits 3 only where the client width is
+  // 332px to 347px. That band is too narrow to leave the scrollbar to the
+  // platform. Headless Chromium on macOS hides it, and on Linux in CI it
+  // reserves a classic scrollbar's width. So the gutter is pinned at 15px. The
+  // client width is 340px and the content 324px, where auto-fill fits
+  // floor((324 + 8) / 108) = 3 columns. 1.11.0 kept a gap on both outer sides
+  // and fit only 2.
+  test('340px of client width fits 3 columns, as grid auto-fill does', () =>
+    withClassicScrollbar(async () => {
+      const { scroller } = await renderCardWindow(355, 300, {
+        data: range(100),
+        root: { className: 'classic-scrollbar' },
+      });
+      await expect.poll(() => columnCount(scroller)).toBe(3);
+      expect(scroller.clientWidth).toBe(340);
+    }));
 });
 
 describe('container style', () => {

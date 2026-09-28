@@ -226,7 +226,7 @@ The release PR copies this list into the GitHub Release.
 - The loading row renders only when the last row is in range.
 - A container narrower than one card shows one column. 1.11.0 showed nothing.
 - The sizer no longer spills 16px past the scroll container.
-- The root reserves a scrollbar gutter. `root.style` can override it.
+- The root reserves a scrollbar gutter. `root.style` can override it. Where the platform shows classic scrollbars, the gutter narrows the content by the scrollbar width, so each column count starts at a frame that much wider.
 - The mount no longer renders every card twice. In 1.11.0, `useResizeObserver` compared against a stale size and rendered again after the mount.
 
 ### Changes from the plan made during the work
@@ -247,6 +247,7 @@ The release PR copies this list into the GitHub Release.
 - `pnpm test:browser` reports 41 tests passed. The phase 3 groups are `columns` with 6, `last row` 7, `scroll offset` 1, `loadMore` 3 and `onScroll` 1. The new groups are `rendering` with 2, `classic scrollbar` 5, `justifyContent start and end` 6, `space-evenly column count` 1, `container style` 2, `resize without loop errors` 1, `loadMore reach` 3, `loading row past the end` 2 and `scroll commits` 1.
 - Of the 162 jsdom tests, 95 were deleted with the code they tested: `getColumns` 25, `getRenderFirstRow` 10, `getRows` 12, `getRenderContainerStyle` 6, `getBaseItemProps` 12 and `getItemProps` 30. 67 are unchanged: `range` 8, `getScrollContainerHeight` 39, `getLastRowFromLength` 15, `getNextOffset` 3, the render test and the index test. 26 were added: `getRowRange` 16, `getRenderRange` 4, `getIndexRange` 5 and the export keys test.
 - The layout is now asserted in the browser suite only.
+- Headless Chromium on macOS hides scrollbars, but on Linux in CI it reserves a classic scrollbar's width in the gutter. So a browser test must not assume a 0px gutter. The first CI run failed `space-evenly column count` at a 340px frame, 2 columns where 3 were expected. That test now pins the gutter at 15px with the `classic-scrollbar` class and uses a 355px frame, which leaves 340px of client width on both platforms.
 
 ### Benchmark
 
