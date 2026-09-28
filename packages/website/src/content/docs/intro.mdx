@@ -1,0 +1,77 @@
+---
+title: Getting started
+description: Install card-window and render your first CardWindow.
+---
+
+import { TabItem, Tabs } from '@astrojs/starlight/components';
+
+## Installation
+
+`@annetaan/card-window` is available as an npm package.
+
+<Tabs syncKey="pkg">
+  <TabItem label="npm">
+
+```bash
+npm install @annetaan/card-window
+```
+
+  </TabItem>
+  <TabItem label="pnpm">
+
+```bash
+pnpm add @annetaan/card-window
+```
+
+  </TabItem>
+  <TabItem label="yarn">
+
+```bash
+yarn add @annetaan/card-window
+```
+
+  </TabItem>
+</Tabs>
+
+## Requirements
+
+- React and React DOM 18 or 19. CI tests both.
+- TypeScript 4.5 or later, if you use the bundled types.
+- A browser with ES2019, CSS Grid, `ResizeObserver` and `IntersectionObserver`. The package is built to ES2019, so it does not run in IE11. Server rendering needs none of these.
+- The root uses `scrollbar-gutter`, which needs Chrome 94, Firefox 97 or Safari 18.2. An older browser ignores it. If that browser shows classic scrollbars, the first render can report "ResizeObserver loop completed with undelivered notifications".
+
+## Usage
+
+```tsx
+import * as React from 'react';
+import { createRoot } from 'react-dom/client';
+
+import { type CardProps, CardWindow, range } from '@annetaan/card-window';
+
+const SampleCard: React.FC<CardProps> = ({ index, style, row, col }) => (
+  <div style={style}>
+    <h2>{index}</h2>
+    <p>
+      row: {row}, col: {col}
+    </p>
+  </div>
+);
+
+const App: React.FC = () => {
+  const data = range(10000); // [0, 1, 2, ..., 9999]
+  const cardRect = { width: 200, height: 120 };
+  return (
+    <div style={{ height: 400 }}>
+      <CardWindow data={data} cardRect={cardRect}>
+        {SampleCard}
+      </CardWindow>
+    </div>
+  );
+};
+
+createRoot(document.getElementById('app')!).render(<App />);
+```
+
+## Upgrading from 1.x
+
+2.0.0 changes the layout, the props and the requirements; see [Upgrading from 1.x](https://github.com/annetaan/card-window#upgrading-from-1x) in the README for what you may have to change.

@@ -1,2 +1,6 @@
 packages:
   - packages/main
+  - packages/website
+# pnpm 12 fails the install on a build script that is neither allowed nor denied; astro works without esbuild's.
+allowBuilds:
+  esbuild: false

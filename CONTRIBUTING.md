@@ -2,16 +2,22 @@
 
 ## Development
 
-- `pnpm install`: installs the workspace, which holds `packages/main` only.
+- `pnpm install`: installs the workspace, which holds `packages/main` and the docs site in `packages/website`.
 - `pnpm build`: builds card-window.
 - `pnpm test`: runs the unit tests with Vitest in jsdom.
 - `pnpm test:browser`: runs the browser tests with Vitest Browser Mode in headless Chromium through Playwright.
 - `pnpm bench`: builds the page in `packages/main/bench` with Vite and measures mounting, scrolling and resizing in headless Chromium at 4x CPU throttling. It prints a Markdown table of medians over 5 runs, and `--runs=N` changes the count.
 - `pnpm coverage`: runs the unit tests with a coverage report.
 - `pnpm typecheck`: type-checks `src`, test files included, with `tsc`.
-- `pnpm lint`: lints `packages/main` with oxlint.
-- `pnpm format`: formats `packages/main` with oxfmt.
+- `pnpm lint`: lints `packages/main` and `packages/website` with oxlint.
+- `pnpm format`: formats `packages/main` and `packages/website` with oxfmt.
 - `pnpm format:check`: checks the format without writing, as CI does.
+- `pnpm docs:dev`: starts the docs site with Astro's dev server.
+- `pnpm docs:build`: builds the docs site into `packages/website/dist`.
+- `pnpm docs:check`: type-checks the docs site with `astro check`.
+
+Each `docs:` script builds card-window first, because the site imports it from `packages/main/lib`.
+To work on card-window and the site together, run `pnpm watch` alongside `pnpm docs:dev`.
 
 Install Chromium once before the first `pnpm test:browser` or `pnpm bench`.
 Run `pnpm --filter @annetaan/card-window exec playwright install --only-shell chromium`.
@@ -22,9 +28,6 @@ pnpm 10 cannot switch itself to 12 and fails with `Unknown system error -8`.
 Use pnpm 12, or run `npx -y pnpm@12.6.0`.
 
 Building needs Node 22.18 or a later 22.x, Node 24.11 or a later 24.x, or Node 26 or later, because tsdown requires it.
-
-`packages/website` is outside the workspace until phase 5 replaces it.
-Until then, the docs site cannot be run or deployed.
 
 ## Smoke test
 
