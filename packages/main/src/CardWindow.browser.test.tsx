@@ -78,6 +78,23 @@ const loadingInView = (scroller: HTMLElement) => {
   return rect.bottom > view.top && rect.top < view.bottom;
 };
 
+// Gives a root with the classic-scrollbar class a 15px scrollbar on every
+// platform, and collects window errors while run is in progress.
+const withClassicScrollbar = async (run: (errors: string[]) => Promise<void>) => {
+  const style = document.createElement('style');
+  style.textContent = '.classic-scrollbar::-webkit-scrollbar { width: 15px; }';
+  document.head.appendChild(style);
+  const errors: string[] = [];
+  const onError = (e: ErrorEvent) => errors.push(e.message);
+  window.addEventListener('error', onError);
+  try {
+    await run(errors);
+  } finally {
+    window.removeEventListener('error', onError);
+    style.remove();
+  }
+};
+
 describe('columns', () => {
   test.each([
     [180, 1],
@@ -88,11 +105,6 @@ describe('columns', () => {
   ])('%ipx wide fits %i columns', async (width, expected) => {
     const { scroller } = await renderCardWindow(width, 300, { data: range(100) });
     await expect.poll(() => columnCount(scroller)).toBe(expected);
-  });
-
-  test('stops at maxCols', async () => {
-    const { scroller } = await renderCardWindow(820, 300, { data: range(100), maxCols: 4 });
-    await expect.poll(() => columnCount(scroller)).toBe(4);
   });
 
   test('follows a change in width', async () => {
@@ -197,5 +209,302 @@ describe('onScroll', () => {
     await expect.poll(() => onScroll.mock.lastCall?.[0].indexesOfVisible).toEqual(range(30, 39));
     scroller.scrollTop = 500;
     await expect.poll(() => onScroll.mock.lastCall?.[0].indexesOfVisible).toEqual(range(15, 24));
+  });
+});
+
+describe('rendering', () => {
+  // At 1108 the render range with the default 200px overscan is rows 8 to 15,
+  // and at 1118 it is still rows 8 to 15, so that scroll must not render any
+  // card. At 2000 the range moves, so new cards render.
+  test('re-renders cards only when the row range changes', async () => {
+    const renders = vi.fn();
+    const CountingCard = ({ index, style }: CardProps) => {
+      renders();
+      return <div data-card-index={index} style={style} />;
+    };
+    const screen = await render(
+      <div data-testid="frame" style={{ width: 400, height: 330 }}>
+        <CardWindow cardRect={cardRect} data={range(300)}>
+          {CountingCard}
+        </CardWindow>
+      </div>,
+    );
+    const frame = screen.container.querySelector('[data-testid="frame"]') as HTMLElement;
+    const scroller = frame.firstElementChild as HTMLElement;
+    await expect.poll(() => columnCount(scroller)).toBe(3);
+    scroller.scrollTop = 1108;
+    await expect.poll(() => indexesInView(scroller)).toEqual(range(30, 42));
+    await nextFrames();
+    const before = renders.mock.calls.length;
+    scroller.scrollTop = 1118;
+    await nextFrames();
+    await nextFrames();
+    expect(renders.mock.calls.length).toBe(before);
+    scroller.scrollTop = 2000;
+    await expect.poll(() => renders.mock.calls.length).toBeGreaterThan(before);
+  });
+
+  // At the end of 300 cards in 3 columns, cards 291 to 299 are in view. At
+  // 530px the grid has 4 columns and the content gets shorter, so the browser
+  // clamps scrollTop. The offset must follow the cards, not the clamp.
+  test('keeps the last card in view when a wider frame adds a column', async () => {
+    const { frame, scroller } = await renderCardWindow(400, 330, { data: range(300) });
+    await expect.poll(() => columnCount(scroller)).toBe(3);
+    scroller.scrollTop = scroller.scrollHeight;
+    await expect.poll(() => indexesInView(scroller)).toContain(299);
+    frame.style.width = '530px';
+    await expect.poll(() => columnCount(scroller)).toBe(4);
+    await nextFrames();
+    expect(indexesInView(scroller)).toContain(299);
+  });
+});
+
+describe('classic scrollbar', () => {
+  // The root reserves a stable scrollbar gutter. Headless Chromium hides the
+  // scrollbar itself, but the gutter still takes the 15px the style below
+  // gives the scrollbar, as a classic scrollbar would. The widths above still
+  // fit the same column counts with 15px less content width. A reserved gutter
+  // also means the scrollbar showing up does not resize the observed content
+  // box, which with a visible classic scrollbar used to fire a window error,
+  // "ResizeObserver loop completed with undelivered notifications".
+  test.each([
+    [180, 1],
+    [280, 2],
+    [400, 3],
+    [600, 5],
+    [820, 7],
+  ])('%ipx wide with a 15px gutter fits %i columns', (width, expected) =>
+    withClassicScrollbar(async (errors) => {
+      const { frame, scroller } = await renderCardWindow(width, 300, {
+        data: range(100),
+        root: { className: 'classic-scrollbar' },
+      });
+      await expect.poll(() => columnCount(scroller)).toBe(expected);
+      expect(scroller.offsetWidth - scroller.clientWidth).toBe(15);
+      frame.style.width = `${width + 108}px`;
+      await expect.poll(() => columnCount(scroller)).toBe(expected + 1);
+      await nextFrames();
+      expect(errors).toEqual([]);
+    }),
+  );
+});
+
+describe('justifyContent start and end', () => {
+  // The same 8 cards in 3 columns as the last row tests above.
+  test.each(['start', 'end'] as const)(
+    'lines up the last row with the columns above when justifyContent is %s',
+    async (justifyContent) => {
+      const { scroller } = await renderCardWindow(400, 400, { data: range(8), justifyContent });
+      await expect.poll(() => cards(scroller).length).toBe(8);
+      expect(columnCount(scroller)).toBe(3);
+      const all = cards(scroller);
+      for (const i of [6, 7]) {
+        expect(all[i].rect.left).toBeCloseTo(all[i - 3].rect.left, 0);
+        expect(all[i].rect.width).toBeCloseTo(all[i - 3].rect.width, 0);
+        expect(all[i].rect.top).toBeGreaterThan(all[i - 3].rect.top);
+      }
+    },
+  );
+
+  // The content box starts 8px inside the scroller and ends 8px before its
+  // client width. Card 2 is the last column of the top row.
+  test.each([
+    ['left', 'left'],
+    ['start', 'left'],
+    ['right', 'right'],
+    ['end', 'right'],
+  ] as const)("%s puts the columns against the content's %s edge", async (justifyContent, edge) => {
+    const { scroller } = await renderCardWindow(400, 400, { data: range(8), justifyContent });
+    await expect.poll(() => cards(scroller).length).toBe(8);
+    const view = scroller.getBoundingClientRect();
+    const all = cards(scroller);
+    if (edge === 'left') {
+      expect(Math.abs(all[0].rect.left - (view.left + 8))).toBeLessThan(1);
+    } else {
+      expect(Math.abs(all[2].rect.right - (view.left + scroller.clientWidth - 8))).toBeLessThan(1);
+    }
+  });
+});
+
+describe('space-evenly column count', () => {
+  // 1.11.0 fit 2 columns and auto-fill fits 3 only where the client width is
+  // 332px to 347px. That band is too narrow to leave the scrollbar to the
+  // platform. Headless Chromium on macOS hides it, and on Linux in CI it
+  // reserves a classic scrollbar's width. So the gutter is pinned at 15px. The
+  // client width is 340px and the content 324px, where auto-fill fits
+  // floor((324 + 8) / 108) = 3 columns. 1.11.0 kept a gap on both outer sides
+  // and fit only 2.
+  test('340px of client width fits 3 columns, as grid auto-fill does', () =>
+    withClassicScrollbar(async () => {
+      const { scroller } = await renderCardWindow(355, 300, {
+        data: range(100),
+        root: { className: 'classic-scrollbar' },
+      });
+      await expect.poll(() => columnCount(scroller)).toBe(3);
+      expect(scroller.clientWidth).toBe(340);
+    }));
+});
+
+describe('container style', () => {
+  // A 300px sizer leaves 284px of content, 2 columns. A 520px one leaves 504px, 4 columns.
+  test('follows a container.style that narrows the sizer', async () => {
+    const { scroller } = await renderCardWindow(600, 300, {
+      data: range(100),
+      container: { style: { maxWidth: 300 } },
+    });
+    await expect.poll(() => columnCount(scroller)).toBe(2);
+  });
+
+  test('follows a container.style change after mount', async () => {
+    const app = (maxWidth: number) => (
+      <div data-testid="frame" style={{ width: 600, height: 300 }}>
+        <CardWindow cardRect={cardRect} data={range(100)} container={{ style: { maxWidth } }}>
+          {Card}
+        </CardWindow>
+      </div>
+    );
+    const screen = await render(app(300));
+    const frame = screen.container.querySelector('[data-testid="frame"]') as HTMLElement;
+    const scroller = frame.firstElementChild as HTMLElement;
+    await expect.poll(() => columnCount(scroller)).toBe(2);
+    await screen.rerender(app(520));
+    await expect.poll(() => columnCount(scroller)).toBe(4);
+  });
+});
+
+describe('resize without loop errors', () => {
+  // A visible 15px classic scrollbar, as in the classic scrollbar tests. At
+  // 600px the content is 600 - 15 - 16 = 569px, which fits 5 columns.
+  test('changing the width 20 times fires no window error', async () => {
+    const style = document.createElement('style');
+    style.textContent = '.classic-scrollbar::-webkit-scrollbar { width: 15px; }';
+    document.head.appendChild(style);
+    const errors: string[] = [];
+    const onError = (e: ErrorEvent) => errors.push(e.message);
+    window.addEventListener('error', onError);
+    try {
+      const { frame, scroller } = await renderCardWindow(400, 330, {
+        data: range(300),
+        root: { className: 'classic-scrollbar' },
+      });
+      await expect.poll(() => columnCount(scroller)).toBe(3);
+      scroller.scrollTop = 1108;
+      await nextFrames();
+      for (let width = 410; width <= 600; width += 10) {
+        frame.style.width = `${width}px`;
+        await nextFrames();
+      }
+      await expect.poll(() => columnCount(scroller)).toBe(5);
+      await nextFrames();
+      expect(errors).toEqual([]);
+    } finally {
+      window.removeEventListener('error', onError);
+      style.remove();
+    }
+  });
+});
+
+describe('loadMore reach', () => {
+  // 3 columns and a 330px view, so the reach is 330 + 200 = 530px. With one
+  // loading card, 5 cards take 2 rows (sizer 224px), 10 take 4 (440px), and
+  // 15 take 6 (656px), where the sentinel at 655px is out of reach. So
+  // loadMore runs at 5 and at 10 cards, and not at 15.
+  test('is called again after data grows while the end is still in reach, and stops when it is not', async () => {
+    const loadMore = vi.fn();
+    const App = () => {
+      const [data, setData] = React.useState(() => range(5));
+      loadMore.mockImplementation(() => setData((d) => range(d.length + 5)));
+      return (
+        <div data-testid="frame" style={{ width: 400, height: 330 }}>
+          <CardWindow cardRect={cardRect} data={data} loading={{ type: 'card', count: 1, LoadingComponent, loadMore }}>
+            {Card}
+          </CardWindow>
+        </div>
+      );
+    };
+    await render(<App />);
+    await expect.poll(() => loadMore.mock.calls.length).toBe(2);
+    await nextFrames();
+    await nextFrames();
+    expect(loadMore).toHaveBeenCalledTimes(2);
+  });
+
+  test('is not called again while the end stays in reach', async () => {
+    const loadMore = vi.fn();
+    const { scroller } = await renderCardWindow(400, 330, {
+      data: range(300),
+      loading: { type: 'card', count: 1, LoadingComponent, loadMore },
+    });
+    await expect.poll(() => columnCount(scroller)).toBe(3);
+    scroller.scrollTop = scroller.scrollHeight;
+    await expect.poll(() => loadMore.mock.calls.length).toBeGreaterThan(0);
+    const count = loadMore.mock.calls.length;
+    scroller.scrollTop -= 150;
+    await nextFrames();
+    await nextFrames();
+    expect(loadMore).toHaveBeenCalledTimes(count);
+  });
+
+  test('renders the loading row only when the last row is in range', async () => {
+    const { scroller } = await renderCardWindow(400, 330, {
+      data: range(300),
+      loading: { type: 'row', height: 50, LoadingComponent },
+    });
+    await expect.poll(() => columnCount(scroller)).toBe(3);
+    expect(scroller.querySelector('[data-loading]')).toBeNull();
+    scroller.scrollTop = scroller.scrollHeight;
+    await expect.poll(() => loadingInView(scroller)).toBe(true);
+  });
+});
+
+describe('loading row past the end', () => {
+  // A 150px view with no overscan and a 300px loading row. Scrolled to the
+  // bottom, the view is past the last card row, so the row range is empty. The
+  // loading row must still follow the last card row and stay inside the sizer:
+  // 9 cards are 3 rows, so the sizer is 8 + 3 * 108 + 300 + 8 = 640px, and the
+  // loading row's top is 8 + 3 * 108 = 332px.
+  test.each([
+    [9, 640, 332],
+    [0, 316, 16],
+  ])('with %i cards keeps the scroll height and the row in place', async (count, height, top) => {
+    const { scroller } = await renderCardWindow(400, 150, {
+      data: range(count),
+      overScanPx: 0,
+      loading: { type: 'row', height: 300, LoadingComponent },
+    });
+    await expect.poll(() => scroller.scrollHeight).toBe(height);
+    for (let i = 0; i < 4; i += 1) {
+      scroller.scrollTop = scroller.scrollHeight;
+      await nextFrames();
+    }
+    expect(scroller.scrollHeight).toBe(height);
+    const el = scroller.querySelector<HTMLElement>('[data-loading]');
+    if (!el) throw new Error('the loading row is not rendered');
+    const offsetTop = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+    expect(offsetTop).toBeCloseTo(top, 0);
+  });
+});
+
+describe('scroll commits', () => {
+  // The rows are 108px apart. Keyed on both ends, the render range would move
+  // twice per row, as a row enters at the bottom and as a row leaves at the top.
+  test('commits at most once per row while scrolling', async () => {
+    const { scroller } = await renderCardWindow(400, 330, { data: range(300) });
+    await expect.poll(() => columnCount(scroller)).toBe(3);
+    let commits = 0;
+    const observer = new MutationObserver(() => {
+      commits += 1;
+    });
+    observer.observe(scroller, { childList: true, subtree: true, attributes: true });
+    try {
+      // 36 steps of 30px are 1,080px, 10 rows.
+      for (let i = 0; i < 36; i += 1) {
+        scroller.scrollTop += 30;
+        await nextFrames();
+      }
+    } finally {
+      observer.disconnect();
+    }
+    expect(commits).toBeLessThanOrEqual(11);
   });
 });

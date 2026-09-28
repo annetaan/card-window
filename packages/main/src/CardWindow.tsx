@@ -1,15 +1,6 @@
 import * as React from 'react';
-import {
-  CSSProperties,
-  Fragment,
-  RefObject,
-  UIEventHandler,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from 'react';
+import { CSSProperties, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 
 /** CardWindow provides the `CardWindow.children` component with this props. */
 export type CardProps<T extends any[] = any[]> = {
@@ -17,7 +8,10 @@ export type CardProps<T extends any[] = any[]> = {
   data: T;
   /** `index` is the index of the data allocated to the `CardWindow.children` component. */
   index: number;
-  /** `style` should be passed to the root of the `CardWindow.children` component. */
+  /**
+   * `style` should be passed to the root of the `CardWindow.children` component.
+   * The grid cell sizes the card, so it is empty today, but pass it anyway.
+   */
   style: CSSProperties;
   /** `row` is the rendered row. */
   row: number;
@@ -32,30 +26,30 @@ export type Rect = { width: number; height: number };
 export type Spacing = { x: number; y: number; top: number; bottom: number; left: number; right: number };
 
 /**
- * JustifyContent only supports 7 values.
- * If the value is `stretch`, the `CardProps.style` has `{ flexBasis: 'auto' }`.
+ * The value goes straight to CSS Grid `justify-content`.
+ * `start` and `end` follow the writing direction, while `left` and `right` do not.
+ * `stretch` grows the columns to fill the row.
  */
 export type JustifyContent =
   | 'left'
   | 'right'
+  | 'start'
+  | 'end'
   | 'center'
   | 'space-around'
   | 'space-between'
   | 'space-evenly'
   | 'stretch';
 
-/**
- * `LastRowAlign` that defines how to align
- * when the number of cards in the last row is less than the number of columns.
- */
-export type LastRowAlign = 'left' | 'right' | 'inherit';
-
 /** There are two rendering types for the infinite loading feature. */
 export type Loading = LoadingCard | LoadingRow;
 
 /** CardWindow provides `LoadingCard.Component` with this props. */
 export type LoadingCardComponentProps = {
-  /** `style` should be passed to the root of `LoadingCard.Component`. */
+  /**
+   * `style` should be passed to the root of `LoadingCard.Component`.
+   * The grid cell sizes the card, so it is empty today, but pass it anyway.
+   */
   style: CSSProperties;
   /** `row` is the rendered row. */
   row: number;
@@ -69,7 +63,8 @@ export type LoadingCardComponentProps = {
  *
  * #### Description of `loadMore`
  *
- * `loadMore` is called when `LoadingCard.Component` is rendered.
+ * `loadMore` is called when the end of the list comes within `overScanPx` of the view,
+ * and again after `data` grows while the end is still that close. It is not called on every render.
  */
 export type LoadingCard = {
   type: 'card';
@@ -77,7 +72,10 @@ export type LoadingCard = {
   count?: number;
   /** `LoadingCard.Component` is rendered after the last card. */
   LoadingComponent: React.ComponentType<LoadingCardComponentProps>;
-  /** `loadMore` is called when `LoadingCard.Component` is rendered. */
+  /**
+   * `loadMore` is called when the end of the list comes within `overScanPx` of the view,
+   * and again after `data` grows while the end is still that close. It is not called on every render.
+   */
   loadMore?(): void;
 };
 
@@ -88,20 +86,24 @@ export type LoadingRowComponentProps = {
 };
 
 /**
- * LoadingRow(`type: 'row'`) displays the loading component in the center next to the last row.
+ * LoadingRow(`type: 'row'`) displays the loading component in the center below the last row.
  * Missing description of function-type is [bug](https://github.com/tgreyuk/typedoc-plugin-markdown/issues/281).
  *
  * #### Description of `loadMore`
  *
- * `loadMore` is called when `LoadingRow.Component` is rendered.
+ * `loadMore` is called when the end of the list comes within `overScanPx` of the view,
+ * and again after `data` grows while the end is still that close. It is not called on every render.
  */
 export type LoadingRow = {
   type: 'row';
   /** `height` is the height of `LoadingRow.Component`. */
   height: number;
-  /** `LoadingRow.Component` is rendered in the center next to the last row. */
+  /** `LoadingRow.Component` is rendered in the center below the last row. */
   LoadingComponent: React.ComponentType<LoadingRowComponentProps>;
-  /** `loadMore` is called when `LoadingRow.Component` is rendered. */
+  /**
+   * `loadMore` is called when the end of the list comes within `overScanPx` of the view,
+   * and again after `data` grows while the end is still that close. It is not called on every render.
+   */
   loadMore?(): void;
 };
 export type ScrollDirection = 'forward' | 'backward';
@@ -110,7 +112,7 @@ export type OnScrollProps = {
   direction: ScrollDirection;
   /** `offset` is a number. */
   offset: number;
-  /** `updateWasRequested` is a boolean. */
+  /** `updateWasRequested` is true when this scroll changed the rendered row range. */
   updateWasRequested: boolean;
   /**  */
   indexesOfVisible: number[];
@@ -147,9 +149,6 @@ export type CardWindowProps<T extends any[] = any[]> = {
   /** These values are `px`. The defaults are 8px. */
   spacing?: Partial<Spacing>;
 
-  /** Maximum number of columns can be set. */
-  maxCols?: number;
-
   root?: {
     /** `root.className` are passed to the root element of `CardWindow`. */
     className?: string;
@@ -165,16 +164,11 @@ export type CardWindowProps<T extends any[] = any[]> = {
   };
 
   /**
-   * JustifyContent only supports 7 values.
-   * If the value is `stretch`, the `CardProps.style` has `{ flexBasis: 'auto' }`.
+   * The value goes straight to CSS Grid `justify-content`. The default is `space-evenly`.
+   * `start` and `end` follow the writing direction, while `left` and `right` do not.
+   * `stretch` grows the columns to fill the row.
    */
   justifyContent?: JustifyContent;
-
-  /**
-   * `LastRowAlign` that defines how to align
-   * when the number of cards in the last row is less than the number of columns.
-   */
-  lastRowAlign?: LastRowAlign;
 
   /** `loading?` is a property for the infinite loading feature. */
   loading?: Loading;
@@ -195,24 +189,6 @@ export const range = (_start: number, _end?: number): number[] => {
   const list: number[] = [];
   for (let i = start; i < end; i += 1) list.push(i);
   return list;
-};
-
-const getColumns = (
-  containerWidth: number,
-  cardWidth: number,
-  spacing: Spacing,
-  justifyContent: JustifyContent,
-  maxCols: number | undefined,
-): number => {
-  const { x, left, right } = spacing;
-  const baseWidth = containerWidth - left - right;
-  if (baseWidth < cardWidth) return 0;
-  if (justifyContent === 'space-evenly') {
-    const cols = Math.max(1, Math.floor((baseWidth - x) / (cardWidth + x)));
-    return maxCols !== undefined ? Math.min(maxCols, cols) : cols;
-  }
-  const cols = Math.floor((baseWidth + x) / (cardWidth + x));
-  return maxCols !== undefined ? Math.min(maxCols, cols) : cols;
 };
 
 const defaultLoadingCardCount = 10;
@@ -239,130 +215,56 @@ const getScrollContainerHeight = (
   return top + rows * (card.height + y) + loading.height + bottom;
 };
 
-const getRenderFirstRow = (offset: number, overScanPx: number, card: Rect, spacing: Spacing): number =>
-  Math.max(0, Math.floor((offset - overScanPx) / (card.height + spacing.y)));
-
-const getRenderLastRow = (
-  offset: number,
-  containerHeight: number,
-  overScanPx: number,
-  card: Rect,
-  { y }: Spacing,
-): number => Math.floor((offset + containerHeight + overScanPx) / (card.height + y));
-
 const getLastRowFromLength = (length: number, loadingCards: number, cols: number): number => {
   if (length === 0) return 0;
   return Math.ceil((length + loadingCards) / cols) - 1;
 };
 
-const getRows = (
-  length: number,
-  loadingCards: number,
-  cols: number,
+/**
+ * The rows that intersect `[offset - margin, offset + viewHeight + margin]`, clamped to `[0, rowCount - 1]`.
+ * Row r spans `[spacing.top + r * pitch, spacing.top + r * pitch + card.height]`. The range is empty when `last < first`.
+ */
+const getRowRange = (
   offset: number,
-  overScanPx: number,
-  containerHeight: number,
+  viewHeight: number,
+  margin: number,
+  rowCount: number,
   card: Rect,
   spacing: Spacing,
 ): [number, number] => {
-  const first = getRenderFirstRow(offset, overScanPx, card, spacing);
-  const last = Math.min(
-    getRenderLastRow(offset, containerHeight, overScanPx, card, spacing),
-    getLastRowFromLength(length, loadingCards, cols),
-  );
+  const pitch = card.height + spacing.y;
+  const lo = offset - margin;
+  const hi = offset + viewHeight + margin;
+  // The first row whose bottom is below lo, and the last row whose top is above hi.
+  const first = Math.max(0, Math.floor((lo - spacing.top - card.height) / pitch) + 1);
+  const last = Math.min(rowCount - 1, Math.ceil((hi - spacing.top) / pitch) - 1);
   return [first, last];
 };
 
-const getRenderContainerStyle = (
-  row: number,
+/**
+ * The rows to render. It starts at the first row of `getRowRange` with `overScanPx` as the margin and always spans
+ * enough rows to cover that range's last row, so it moves only when its first row does: one commit per row while
+ * scrolling. Keying on both ends would commit twice per row, once as a row enters and once as a row leaves.
+ */
+const getRenderRange = (
+  offset: number,
+  viewHeight: number,
+  overScanPx: number,
+  rowCount: number,
   card: Rect,
   spacing: Spacing,
-  justifyContent: JustifyContent,
-): CSSProperties => {
-  const top = row * (card.height + spacing.y) + spacing.top;
-  return {
-    display: 'flex',
-    flexWrap: 'wrap',
-    justifyContent,
-    transform: `translate(0, ${top}px)`,
-  };
+): [number, number] => {
+  const [first] = getRowRange(offset, viewHeight, overScanPx, rowCount, card, spacing);
+  // At most this many rows intersect a reach of viewHeight + 2 * overScanPx.
+  const span = Math.ceil((viewHeight + 2 * overScanPx + card.height) / (card.height + spacing.y));
+  const last = Math.min(rowCount - 1, first + span - 1);
+  return [Math.min(first, last + 1), last];
 };
 
-const getBaseItemProps = (
-  index: number,
-  cols: number,
-  justifyContent: JustifyContent,
-  { width, height }: Rect,
-  { x }: Spacing,
-): Omit<CardProps, 'data' | 'index'> => {
-  const row = Math.floor(index / cols);
-  const col = index % cols;
-  const marginLeft = col !== 0 && ['center', 'left', 'right', 'stretch'].includes(justifyContent) ? x : undefined;
-  const flexGrow = justifyContent === 'stretch' ? 1 : undefined;
-  const style = { width, flexGrow, height, marginLeft };
-  return { row, col, style };
-};
-
-type CardTypeProps = { type: 'card' } & Omit<CardProps, 'data'>;
-type PlaceholderTypeProps = { type: 'placeholder' } & Omit<CardProps, 'data' | 'index'>;
-type LoadingTypeProps = { type: 'loading' } & Omit<CardProps, 'data' | 'index'>;
-type ItemProps = CardTypeProps | PlaceholderTypeProps | LoadingTypeProps;
-export type ItemType = ItemProps['type'];
-const isCardTypeProps = (props: ItemProps): props is CardTypeProps => props.type === 'card';
-
-const getStop = (
-  rows: [number, number],
-  cols: number,
-  lastRowAlign: LastRowAlign,
-  length: number,
-  loadingCards: number,
-): number => {
-  if (lastRowAlign !== 'inherit') return (rows[1] + 1) * cols;
-  return Math.min(length + loadingCards, (rows[1] + 1) * cols);
-};
-
-const getItemTypeAndIndex = (
-  index: number,
-  col: number,
-  length: number,
-  loadingCards: number,
-  lastRowAlign: LastRowAlign,
-  isLastRow: boolean,
-  stop: number,
-): { type: ItemType; index?: number } => {
-  if (lastRowAlign !== 'right') {
-    if (index < length) return { type: 'card', index };
-    if (index < length + loadingCards) return { type: 'loading' };
-    return { type: 'placeholder' };
-  }
-  // lastRowAlign === 'right'
-  if (!isLastRow) return index < length ? { type: 'card', index } : { type: 'loading' };
-
-  const placeholderCount = stop - length - loadingCards;
-  if (col < placeholderCount) return { type: 'placeholder' };
-  return index - placeholderCount < length ? { type: 'card', index: index - placeholderCount } : { type: 'loading' };
-};
-
-const getItemProps = (
-  length: number,
-  loadingCards: number,
-  cols: number,
-  rows: [number, number],
-  card: Rect,
-  spacing: Spacing,
-  justifyContent: JustifyContent,
-  lastRowAlign: LastRowAlign,
-): ItemProps[] => {
-  if (cols === 0) return [];
-  if (length + loadingCards === 0) return [];
-  const start = rows[0] * cols;
-  const stop = getStop(rows, cols, lastRowAlign, length, loadingCards);
-  return range(start, stop).map((i) => {
-    const base = getBaseItemProps(i, cols, justifyContent, card, spacing);
-    const isLastRow = getLastRowFromLength(length, loadingCards, cols) === base.row;
-    const { type, index } = getItemTypeAndIndex(i, base.col, length, loadingCards, lastRowAlign, isLastRow, stop);
-    return { type, index, ...base };
-  });
+/** The card indexes `[start, stop)` of the rows `rows`, with `count` cards and loading cards in all. */
+const getIndexRange = (rows: [number, number], cols: number, count: number): [number, number] => {
+  if (cols === 0 || rows[1] < rows[0]) return [0, 0];
+  return [rows[0] * cols, Math.min((rows[1] + 1) * cols, count)];
 };
 
 const getNextOffset = (offset: number, before: number, after: number, card: Rect, spacing: Spacing): number => {
@@ -373,67 +275,62 @@ const getNextOffset = (offset: number, before: number, after: number, card: Rect
 };
 
 export const functions = {
-  getColumns,
   getScrollContainerHeight,
-  getRenderFirstRow,
   getLastRowFromLength,
-  getRows,
-  getRenderContainerStyle,
-  getBaseItemProps,
-  getItemProps,
+  getRowRange,
+  getRenderRange,
+  getIndexRange,
   getNextOffset,
 };
 
+/** The style every card and loading card receives. The grid cell sizes the card. It is only read. */
+const cardStyle: CSSProperties = {};
+
 /**
- * `useResizeObserver` is a custom Hook for monitoring the size of the element.
- *
- * If you give the hook an initial value for the element size, the hook will return that element size if ref is null.
- *
- * ```tsx
- * const initialSize = { width: 200, height: 100 };
- *
- * export const Example: React.FC = () => {
- *     const [{ width, height }, ref] = useResizeObserver<HTMLDivElement>();
- *
- *     if (ref.current === null) {
- *         console.log(`width: ${width}`); // 200 from initialSize
- *         console.log(`height: ${height}`); // 100 from initialSize
- *     } else {
- *         console.log(`width: ${width}`); // actual element width
- *         console.log(`height: ${height}`); // actual element height
- *     }
- *
- *     return (
- *         <div ref={ref}>
- *             ...
- *         </div>
- *     )
- * }
- * ```
+ * The number of column tracks the grid resolved. It is 0 while the tracks are unresolved,
+ * as under `display: none` or in jsdom, where the value still reads `repeat(…)`.
  */
-export const useResizeObserver = <T extends Element>(): Partial<Rect> & { ref: RefObject<T> } => {
-  const [rect, set] = useState<Partial<Rect>>({ width: undefined, height: undefined });
-  const ref = useRef<T>(null);
-  useEffect(() => {
-    const resizeObserver = new ResizeObserver((entries) => {
-      const { width, height } = entries[0].contentRect;
-      if (width !== rect.width || height !== rect.height) set({ width, height });
-    });
-    if (ref.current) {
-      resizeObserver.observe(ref.current);
-      const { width, height } = ref.current.getBoundingClientRect();
-      if (width !== rect.width || height !== rect.height) set({ width, height });
-    }
-    return () => resizeObserver.disconnect();
-  }, []);
-  return useMemo(() => ({ ref, ...rect }), [rect]);
+const readColumnCount = (grid: HTMLElement | null): number => {
+  if (!grid) return 0;
+  const value = getComputedStyle(grid).gridTemplateColumns.trim();
+  if (value === '' || value === 'none' || value.includes('(')) return 0;
+  return value.split(/\s+/).length;
 };
 
-const useForceUpdate = () => useReducer((x) => x + 1, 0)[1];
+type ItemProps = {
+  Children: React.ComponentType<CardProps>;
+  data: any[];
+  index: number;
+  row: number;
+  col: number;
+};
+
+// Memoized, so a card whose index, row and col stay the same does not render again when the row range moves.
+const Item = React.memo(({ Children, data, index, row, col }: ItemProps) => (
+  <Children data={data} index={index} style={cardStyle} row={row} col={col} />
+));
+
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 const defaultSpacing: Spacing = { x: 8, y: 8, top: 8, bottom: 8, left: 8, right: 8 };
 
-const CardWindow: React.FC<CardWindowProps> = React.forwardRef((props, parentRef) => {
+type Latest = {
+  rows: [number, number];
+  rowCount: number;
+  viewHeight: number;
+  cols: number;
+  length: number;
+  card: Rect;
+  spacing: Spacing;
+  overScanPx: number;
+  thresholdOfVisible: number;
+  onScroll: ((props: OnScrollProps) => void) | undefined;
+  loadMore: (() => void) | undefined;
+};
+
+const sameRange = (a: [number, number], b: [number, number]) => a[0] === b[0] && a[1] === b[1];
+
+const CardWindow = React.forwardRef<HTMLDivElement, CardWindowProps>((props, parentRef) => {
   const {
     data,
     cardRect: card,
@@ -441,11 +338,9 @@ const CardWindow: React.FC<CardWindowProps> = React.forwardRef((props, parentRef
     getKey = (index) => index,
     overScanPx = 200,
     spacing: spacingProp,
-    maxCols = undefined,
     root = {},
     container = {},
     justifyContent: justify = 'space-evenly',
-    lastRowAlign = 'left',
     loading,
     thresholdOfVisible = 0.5,
     onScroll,
@@ -453,99 +348,224 @@ const CardWindow: React.FC<CardWindowProps> = React.forwardRef((props, parentRef
 
   const { length } = data;
   const spacing = { ...defaultSpacing, ...spacingProp };
-  const offsetRef = useRef(0);
-  const render = useForceUpdate();
-  const { ref, width = 0, height = 0 } = useResizeObserver<HTMLDivElement>();
-  React.useImperativeHandle(parentRef, () => () => ref.current);
-  const colsRef = useRef(0);
-  const cols = getColumns(width, card.width, spacing, justify, maxCols);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  useImperativeHandle(parentRef, () => scrollerRef.current as HTMLDivElement, []);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [measure, setMeasure] = useState<{ viewHeight: number; cols: number } | null>(null);
+  const [offset, setOffset] = useState(0);
+  const cols = measure?.cols ?? 0;
+  const viewHeight = measure?.viewHeight ?? 0;
   const loadingCards = getLoadingCardCount(loading);
+  const rowCount = cols === 0 || length + loadingCards === 0 ? 0 : getLastRowFromLength(length, loadingCards, cols) + 1;
   const scrollContainerHeight = getScrollContainerHeight(cols, length + loadingCards, card, spacing, loading);
-  const rootStyle = { width: '100%', minWidth: card.width, height: '100%', ...root.style, overflow: 'auto' };
+  // A stable gutter keeps the content box the same width whether or not a classic scrollbar shows, so the
+  // first render inside the ResizeObserver callback does not resize what that callback observes.
+  const rootStyle: CSSProperties = {
+    width: '100%',
+    minWidth: card.width,
+    height: '100%',
+    scrollbarGutter: 'stable',
+    ...root.style,
+    overflow: 'auto',
+  };
   const scrollContainerStyle: CSSProperties = {
     ...container.style,
     width: '100%',
     paddingLeft: spacing.left,
     paddingRight: spacing.right,
+    boxSizing: 'border-box',
+    // The containing block of the sentinel.
+    position: 'relative',
     height: scrollContainerHeight,
   };
-  const rows = getRows(length, loadingCards, cols, offsetRef.current, overScanPx, height, card, spacing);
-  const items = getItemProps(length, loadingCards, cols, rows, card, spacing, justify, lastRowAlign);
-
-  const handleScroll: UIEventHandler<HTMLDivElement> = (e) => {
-    const scrollOffset = e.currentTarget.scrollTop;
-    const scrollDirection: ScrollDirection = scrollOffset < offsetRef.current ? 'backward' : 'forward';
-    offsetRef.current = scrollOffset;
-    const first = getRenderFirstRow(offsetRef.current, overScanPx, card, spacing);
-    const scrollUpdateWasRequested = rows[0] !== first;
-    if (scrollUpdateWasRequested) render();
-    if (!onScroll) return;
-    const negativeOverScanPx = -card.height * thresholdOfVisible;
-    const visibleRows = getRows(
-      length,
-      loadingCards,
-      cols,
-      offsetRef.current,
-      negativeOverScanPx,
-      height,
-      card,
-      spacing,
-    );
-    const visibleItems = getItemProps(
-      length,
-      loadingCards,
-      cols,
-      visibleRows,
-      card,
-      spacing,
-      justify,
-      lastRowAlign,
-    ).filter(isCardTypeProps);
-    const onScrollProps: OnScrollProps = {
-      direction: scrollDirection,
-      offset: scrollOffset,
-      updateWasRequested: scrollUpdateWasRequested,
-      indexesOfVisible: visibleItems.map((v) => v.index),
-    };
-    onScroll(onScrollProps);
+  const rows = getRenderRange(offset, viewHeight, overScanPx, rowCount, card, spacing);
+  // A loading row taller than the reach leaves the range empty past the last card row. The loading row follows
+  // the window, so start the window at the last card row to keep the loading row inside the sizer.
+  // The scroll handler and the after-commit effect keep comparing the raw rows.
+  const shownRows: [number, number] =
+    loading?.type === 'row' && rows[0] > rowCount - 1 ? [Math.max(rowCount - 1, 0), rows[1]] : rows;
+  const [start, stop] = getIndexRange(shownRows, cols, length + loadingCards);
+  const lastRowInRange = rowCount === 0 || rows[1] >= rowCount - 1;
+  // Before the first measurement the sizer is 0px tall, so a sentinel would sit in view even for a long list.
+  const hasSentinel = cols > 0 && loading?.loadMore !== undefined;
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const windowStyle: CSSProperties = {
+    transform: `translateY(${spacing.top + shownRows[0] * (card.height + spacing.y)}px)`,
   };
-  const renderContainerStyle = getRenderContainerStyle(rows[0], card, spacing, justify);
+  // The browser decides the column count. CardWindow reads it back from the resolved tracks.
+  const gridStyle: CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns:
+      justify === 'stretch' ? `repeat(auto-fill, minmax(${card.width}px, 1fr))` : `repeat(auto-fill, ${card.width}px)`,
+    gridAutoRows: `${card.height}px`,
+    columnGap: spacing.x,
+    rowGap: spacing.y,
+    justifyContent: justify,
+  };
 
-  useEffect(() => {
-    if (colsRef.current !== cols && colsRef.current !== 0 && cols !== 0 && ref.current) {
-      ref.current.scrollTop = getNextOffset(offsetRef.current, colsRef.current, cols, card, spacing);
+  // The first observation arrives before the first paint, and flushSync renders the cards before that paint too.
+  useIsomorphicLayoutEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return undefined;
+    const observer = new ResizeObserver((entries) => {
+      const viewHeight = entries[0].contentRect.height;
+      const cols = readColumnCount(gridRef.current);
+      flushSync(() =>
+        setMeasure((prev) =>
+          prev && prev.viewHeight === viewHeight && prev.cols === cols ? prev : { viewHeight, cols },
+        ),
+      );
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // The last scrollTop the scroll handler saw. Only the scroll handler writes it.
+  const lastScrollTop = useRef(0);
+
+  // Keep the first visible card in view when the column count changes. The live scrollTop may already be
+  // clamped to the shorter sizer of this commit, so start from the last position the scroll handler saw.
+  // Its rAF callback runs before the ResizeObserver callback in a frame, so no scroll is missed.
+  const prevColsRef = useRef(0);
+  useIsomorphicLayoutEffect(() => {
+    const prev = prevColsRef.current;
+    prevColsRef.current = cols;
+    const el = scrollerRef.current;
+    if (el && prev !== cols && prev !== 0 && cols !== 0) {
+      el.scrollTop = getNextOffset(lastScrollTop.current, prev, cols, card, spacing);
     }
-    colsRef.current = cols;
   }, [cols]);
 
-  useEffect(() => {
-    if (scrollContainerHeight !== 0 && loading?.loadMore) {
-      const lastItem = items.find((item) => item.type === 'card' && item.index === length - 1);
-      if (lastItem) loading.loadMore();
+  // The scroll handler reads what it needs from here. It is written after every commit, never during render.
+  const latest = useRef<Latest | null>(null);
+  useIsomorphicLayoutEffect(() => {
+    latest.current = {
+      rows,
+      rowCount,
+      viewHeight,
+      cols,
+      length,
+      card,
+      spacing,
+      overScanPx,
+      thresholdOfVisible,
+      onScroll,
+      loadMore: loading?.loadMore,
+    };
+    // Only the scroll container is observed, so a sizer narrowed by CardWindow's own props shows up here,
+    // after the commit that narrowed it. Observing the sizer would risk a ResizeObserver loop.
+    const nextCols = readColumnCount(gridRef.current);
+    if (measure && nextCols !== measure.cols) {
+      setMeasure({ ...measure, cols: nextCols });
+      return;
     }
-  }, [scrollContainerHeight, loading?.loadMore, items]);
+    // The offset state only changes with the row range, so it can lag scrollTop by less than a row.
+    // After a resize or a data change, derive the range from the real scrollTop again.
+    const el = scrollerRef.current;
+    if (!el) return;
+    const next = getRenderRange(el.scrollTop, viewHeight, overScanPx, rowCount, card, spacing);
+    if (!sameRange(next, rows)) setOffset(el.scrollTop);
+  });
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return undefined;
+    let frame: number | null = null;
+    const update = () => {
+      frame = null;
+      const current = latest.current;
+      if (!current) return;
+      const scrollTop = el.scrollTop;
+      const next = getRenderRange(
+        scrollTop,
+        current.viewHeight,
+        current.overScanPx,
+        current.rowCount,
+        current.card,
+        current.spacing,
+      );
+      const changed = !sameRange(next, current.rows);
+      if (changed) setOffset(scrollTop);
+      if (current.onScroll) {
+        const margin = -current.card.height * current.thresholdOfVisible;
+        const vis = getRowRange(scrollTop, current.viewHeight, margin, current.rowCount, current.card, current.spacing);
+        const indexesOfVisible =
+          vis[1] < vis[0] ? [] : range(vis[0] * current.cols, Math.min((vis[1] + 1) * current.cols, current.length));
+        current.onScroll({
+          direction: scrollTop < lastScrollTop.current ? 'backward' : 'forward',
+          offset: scrollTop,
+          updateWasRequested: changed,
+          indexesOfVisible,
+        });
+      }
+      lastScrollTop.current = scrollTop;
+    };
+    const schedule = () => {
+      if (frame === null) frame = requestAnimationFrame(update);
+    };
+    el.addEventListener('scroll', schedule, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', schedule);
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  // Recreated when data.length changes: a new observer reports the sentinel's state again, so a list that
+  // still ends within reach keeps loading. Otherwise it fires only when the sentinel enters the reach.
+  useEffect(() => {
+    const el = scrollerRef.current;
+    const sentinel = sentinelRef.current;
+    if (!hasSentinel || !el || !sentinel) return undefined;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) latest.current?.loadMore?.();
+      },
+      { root: el, rootMargin: `${overScanPx}px 0px` },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasSentinel, overScanPx, length]);
 
   return (
-    <div ref={ref} className={root.className} style={rootStyle} onScroll={handleScroll}>
+    <div ref={scrollerRef} className={root.className} style={rootStyle}>
       <div className={container.className} style={scrollContainerStyle}>
-        <div style={renderContainerStyle}>
-          {items.map((item, i) => {
-            const key = item.type === 'card' ? getKey(item.index, data) : `row:${item.row},col:${item.col}`;
-            return (
-              <Fragment key={key}>
-                {i !== 0 && item.col === 0 && <div style={{ width: '100%', height: spacing.y }} />}
-                {item.type === 'card' && <Children data={data} {...item} />}
-                {item.type === 'placeholder' && <div style={item.style} />}
-                {item.type === 'loading' && loading?.type === 'card' && <loading.LoadingComponent {...item} />}
-              </Fragment>
-            );
-          })}
-          {loading?.type === 'row' && (
+        <div style={windowStyle}>
+          <div ref={gridRef} style={gridStyle}>
+            {range(start, stop).map((i) =>
+              i < length ? (
+                <Item
+                  key={getKey(i, data)}
+                  Children={Children}
+                  data={data}
+                  index={i}
+                  row={Math.floor(i / cols)}
+                  col={i % cols}
+                />
+              ) : (
+                loading?.type === 'card' && (
+                  <loading.LoadingComponent
+                    key={`loading:${i - length}`}
+                    style={cardStyle}
+                    row={Math.floor(i / cols)}
+                    col={i % cols}
+                  />
+                )
+              ),
+            )}
+          </div>
+          {loading?.type === 'row' && cols > 0 && lastRowInRange && (
             <div style={{ width: '100%', paddingTop: spacing.y, display: 'flex', justifyContent: 'center' }}>
               <loading.LoadingComponent style={{ height: loading.height }} />
             </div>
           )}
         </div>
+        {hasSentinel && (
+          <div
+            ref={sentinelRef}
+            aria-hidden="true"
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 1, pointerEvents: 'none' }}
+          />
+        )}
       </div>
     </div>
   );

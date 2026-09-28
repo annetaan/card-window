@@ -6,28 +6,10 @@ import {
 } from '@testing-library/react';
 import { describe, expect, test } from 'vitest';
 
-import CardWindow, {
-  CardProps,
-  JustifyContent,
-  LastRowAlign,
-  Loading,
-  Rect,
-  Spacing,
-  functions,
-  range,
-} from './CardWindow';
+import CardWindow, { CardProps, Loading, Rect, Spacing, functions, range } from './CardWindow';
 
-const {
-  getColumns,
-  getScrollContainerHeight,
-  getRenderFirstRow,
-  getLastRowFromLength,
-  getRows,
-  getRenderContainerStyle,
-  getBaseItemProps,
-  getItemProps,
-  getNextOffset,
-} = functions;
+const { getScrollContainerHeight, getLastRowFromLength, getRowRange, getRenderRange, getIndexRange, getNextOffset } =
+  functions;
 
 describe('range', () => {
   describe('range(stop)', () => {
@@ -45,62 +27,6 @@ describe('range', () => {
       [5, 7, [5, 6]],
       [5, 8, [5, 6, 7]],
     ])('range(%p, %p) => %p', (x, y, expected) => expect(range(x, y)).toEqual(expected));
-  });
-});
-
-describe('getColumns(container, card, spacing, justifyContent, maxCols)', () => {
-  test('container.width < card.width => 0', () => {
-    const spacing: Spacing = { x: 0, y: 0, top: 0, bottom: 0, left: 10, right: 10 };
-    expect(getColumns(120, 120, spacing, 'center', undefined)).toBe(0);
-  });
-  describe('container.width: 200', () => {
-    const name = 'card.width: %p, spacing.x: %p => %p';
-    const byCase = (justifyContent: JustifyContent, maxCols: number | undefined) => (width, x, expected) => {
-      const spacing = { x, y: 0, top: 0, bottom: 0, left: 0, right: 0 };
-      expect(getColumns(200, width, spacing, justifyContent, maxCols)).toBe(expected);
-    };
-    describe(`justifyContent: not space-evenly('center')`, () => {
-      describe('maxCols: undefined', () =>
-        test.each([
-          [100, 1, 1],
-          [100, 0, 2],
-          [80, 41, 1],
-          [80, 40, 2],
-          [80, 0, 2],
-          [60, 81, 1],
-          [60, 80, 2],
-          [60, 11, 2],
-          [60, 10, 3],
-          [60, 0, 3],
-        ])(name, byCase('center', undefined)));
-
-      describe('maxCols: 2', () =>
-        test.each([
-          [80, 0, 2],
-          [60, 0, 2],
-        ])(name, byCase('center', 2)));
-    });
-
-    describe(`justifyContent: 'space-evenly'`, () => {
-      describe('maxCols: undefined', () =>
-        test.each([
-          [100, 1, 1],
-          [100, 0, 2],
-          [80, 14, 1],
-          [80, 13, 2],
-          [80, 0, 2],
-          [60, 27, 1],
-          [60, 26, 2],
-          [60, 6, 2],
-          [60, 5, 3],
-          [60, 0, 3],
-        ])(name, byCase('space-evenly', undefined)));
-    });
-    describe('maxCols: 2', () =>
-      test.each([
-        [80, 0, 2],
-        [60, 0, 2],
-      ])(name, byCase('space-evenly', 2)));
   });
 });
 
@@ -184,25 +110,6 @@ describe('getScrollContainerHeight(cols, length, card, spacing, loading)', () =>
     ])(name, byCase(2, undefined)));
 });
 
-describe('getRenderFirstRow', () =>
-  test.each`
-    offset | overScanPx | expected
-    ${0}   | ${0}       | ${0}
-    ${109} | ${0}       | ${0}
-    ${110} | ${0}       | ${1}
-    ${219} | ${0}       | ${1}
-    ${220} | ${0}       | ${2}
-    ${0}   | ${200}     | ${0}
-    ${309} | ${200}     | ${0}
-    ${310} | ${200}     | ${1}
-    ${419} | ${200}     | ${1}
-    ${420} | ${200}     | ${2}
-  `('offset: $offset, overScanPx: $overScanPx, expected: $expected', ({ offset, overScanPx, expected }) => {
-    const card: Rect = { width: 0, height: 100 };
-    const spacing: Spacing = { x: 0, y: 10, top: 10, bottom: 10, left: 0, right: 0 };
-    expect(getRenderFirstRow(offset, overScanPx, card, spacing)).toEqual(expected);
-  }));
-
 describe('getLastRowFromLength', () => {
   const name = 'length: $length, loadingCards: $loadingCards, expected: $expected';
   const byCase =
@@ -241,155 +148,105 @@ describe('getLastRowFromLength', () => {
     `(name, byCase(2)));
 });
 
-describe('getRows', () => {
-  const name = 'offset: %p, length: %p, loadingCard: %p, cols: %p => %p';
-  const byCase = (overScanPx: number) => (offset, length, loadingCards, cols, expected) => {
-    const containerHeight = 200;
-    const card: Rect = { width: 0, height: 100 };
-    const spacing: Spacing = { x: 0, y: 0, top: 0, bottom: 0, left: 0, right: 0 };
-    const result = getRows(length, loadingCards, cols, offset, overScanPx, containerHeight, card, spacing);
-    expect(result).toEqual(expected);
-  };
+describe('getRowRange(offset, viewHeight, margin, rowCount, card, spacing)', () => {
+  // Row r spans [top + 108r, top + 108r + 100].
+  const card: Rect = { width: 100, height: 100 };
+  const spacing = (top: number): Spacing => ({ x: 8, y: 8, top, bottom: 8, left: 8, right: 8 });
+  const name = 'offset: $offset, viewHeight: $viewHeight, margin: $margin, rowCount: $rowCount, top: $top => $expected';
+  const byCase = ({ offset, viewHeight, margin, rowCount, top, expected }) =>
+    expect(getRowRange(offset, viewHeight, margin, rowCount, card, spacing(top))).toEqual(expected);
 
-  describe('overScanPx: 0', () =>
-    test.each([
-      [0, 3, 0, 3, [0, 0]],
-      [0, 4, 0, 3, [0, 1]],
-      [99, 100, 0, 3, [0, 2]],
-      [100, 100, 0, 3, [1, 3]],
-      [3299, 100, 0, 3, [32, 33]],
-      [3300, 100, 0, 3, [33, 33]],
-    ])(name, byCase(0)));
+  describe('with an overscan margin', () =>
+    test.each`
+      offset  | viewHeight | margin | rowCount | top  | expected
+      ${1108} | ${330}     | ${200} | ${100}   | ${8} | ${[8, 15]}
+      ${1118} | ${330}     | ${200} | ${100}   | ${8} | ${[8, 15]}
+      ${1171} | ${330}     | ${200} | ${100}   | ${8} | ${[8, 15]}
+      ${1172} | ${330}     | ${200} | ${100}   | ${8} | ${[9, 15]}
+      ${1108} | ${330}     | ${0}   | ${100}   | ${8} | ${[10, 13]}
+    `(name, byCase));
 
-  describe('overScanPx: 200', () =>
-    test.each([
-      [0, 3, 0, 3, [0, 0]],
-      [0, 4, 0, 3, [0, 1]],
-      [299, 100, 0, 3, [0, 6]],
-      [300, 100, 0, 3, [1, 7]],
-      [3299, 100, 0, 3, [30, 33]],
-      [3300, 100, 0, 3, [31, 33]],
-    ])(name, byCase(200)));
-});
+  describe('spacing.top shifts the rows', () =>
+    test.each`
+      offset | viewHeight | margin | rowCount | top   | expected
+      ${210} | ${100}     | ${0}   | ${100}   | ${0}  | ${[2, 2]}
+      ${210} | ${100}     | ${0}   | ${100}   | ${50} | ${[1, 2]}
+      ${120} | ${100}     | ${0}   | ${100}   | ${0}  | ${[1, 2]}
+      ${120} | ${100}     | ${0}   | ${100}   | ${50} | ${[0, 1]}
+    `(name, byCase));
 
-describe('getRenderContainerStyle', () => {
-  const name = 'row: %p, card.height: %p, spacing: { x: 0, y: %p, top: %p, bottom: 0 } => translate(0, %ppx)';
-  const byCase = (row, height, y, top, expected) => {
-    const card: Rect = { width: 0, height };
-    const spacing: Spacing = { x: 0, y, top, bottom: 0, left: 0, right: 0 };
-    expect(getRenderContainerStyle(row, card, spacing, 'space-evenly').transform).toBe(`translate(0, ${expected}px)`);
-  };
-  test.each([
-    [0, 100, 0, 0, 0],
-    [0, 100, 10, 0, 0],
-    [0, 100, 0, 10, 10],
-    [1, 100, 0, 0, 100],
-    [1, 100, 10, 0, 110],
-    [1, 100, 10, 10, 120],
-  ])(name, byCase);
-});
+  describe('visible range with a negative margin', () =>
+    test.each`
+      offset  | viewHeight | margin | rowCount | top  | expected
+      ${1108} | ${330}     | ${-50} | ${100}   | ${8} | ${[10, 12]}
+      ${500}  | ${330}     | ${-50} | ${100}   | ${8} | ${[5, 7]}
+    `(name, byCase));
 
-describe('getBaseItemProps', () => {
-  const name = 'index: %p, cols: %p, x: %p => marginLeft: %p, flexGrow: %p, row: %p, col: %p';
-  const byCase = (justifyContent: JustifyContent) => (index, cols, x, marginLeft, flexGrow, row, col) => {
-    const card: Rect = { width: 0, height: 0 };
-    const spacing: Spacing = { x, y: 0, top: 0, bottom: 0, left: 0, right: 0 };
-    const result = getBaseItemProps(index, cols, justifyContent, card, spacing);
-    expect(result.row).toBe(row);
-    expect(result.col).toBe(col);
-    expect(result.style.marginLeft).toBe(marginLeft);
-    expect(result.style.flexGrow).toBe(flexGrow);
-  };
+  describe('clamping', () =>
+    test.each`
+      offset   | viewHeight | margin | rowCount | top  | expected
+      ${0}     | ${330}     | ${200} | ${100}   | ${8} | ${[0, 4]}
+      ${10500} | ${330}     | ${200} | ${100}   | ${8} | ${[95, 99]}
+      ${0}     | ${330}     | ${200} | ${2}     | ${8} | ${[0, 1]}
+    `(name, byCase));
 
-  describe('justifyContent: stretch', () =>
-    test.each([
-      [0, 3, 0, undefined, 1, 0, 0],
-      [1, 3, 0, 0, 1, 0, 1],
-      [2, 3, 0, 0, 1, 0, 2],
-      [3, 3, 0, undefined, 1, 1, 0],
-    ])(name, byCase('stretch')));
-
-  describe('justifyContent: center', () =>
-    test.each([
-      [0, 3, 0, undefined, undefined, 0, 0],
-      [1, 3, 0, 0, undefined, 0, 1],
-      [2, 3, 0, 0, undefined, 0, 2],
-      [3, 3, 0, undefined, undefined, 1, 0],
-    ])(name, byCase('center')));
-
-  describe('justifyContent: space-evenly', () =>
-    test.each([
-      [0, 3, 0, undefined, undefined, 0, 0],
-      [1, 3, 0, undefined, undefined, 0, 1],
-      [2, 3, 0, undefined, undefined, 0, 2],
-      [3, 3, 0, undefined, undefined, 1, 0],
-    ])(name, byCase('space-evenly')));
-});
-
-describe('getItemProps', () => {
-  const name = 'rows: %p, cols: %p, length: %p => %p';
-  const byCase = (lastRowAlign: LastRowAlign, loadingCards: number) => (length, rows, expected) => {
-    const card: Rect = { width: 0, height: 0 };
-    const spacing: Spacing = { x: 0, y: 0, top: 0, bottom: 0, left: 0, right: 0 };
-    const items = getItemProps(length, loadingCards, 3, rows, card, spacing, 'space-evenly', lastRowAlign);
-    expect(items.length).toBe(expected.length);
-    expect(items.map((item) => item.type)).toEqual(expected);
-  };
-  describe('lastRowAlign: left', () => {
-    describe('loadingCards: 0', () =>
-      test.each([
-        [99, [0, 1], ['card', 'card', 'card', 'card', 'card', 'card']],
-        [100, [31, 32], ['card', 'card', 'card', 'card', 'card', 'card']],
-        [100, [32, 33], ['card', 'card', 'card', 'card', 'placeholder', 'placeholder']],
-        [101, [32, 33], ['card', 'card', 'card', 'card', 'card', 'placeholder']],
-        [102, [32, 33], ['card', 'card', 'card', 'card', 'card', 'card']],
-      ])(name, byCase('left', 0)));
-    describe('loadingCards: 1', () =>
-      test.each([
-        [99, [0, 1], ['card', 'card', 'card', 'card', 'card', 'card']],
-        [99, [31, 32], ['card', 'card', 'card', 'card', 'card', 'card']],
-        [99, [32, 33], ['card', 'card', 'card', 'loading', 'placeholder', 'placeholder']],
-        [100, [32, 33], ['card', 'card', 'card', 'card', 'loading', 'placeholder']],
-        [101, [32, 33], ['card', 'card', 'card', 'card', 'card', 'loading']],
-      ])(name, byCase('left', 1)));
-  });
-  describe('lastRowAlign: right', () => {
-    describe('loadingCards: 0', () =>
-      test.each([
-        [99, [0, 1], ['card', 'card', 'card', 'card', 'card', 'card']],
-        [100, [31, 32], ['card', 'card', 'card', 'card', 'card', 'card']],
-        [100, [32, 33], ['card', 'card', 'card', 'placeholder', 'placeholder', 'card']],
-        [101, [32, 33], ['card', 'card', 'card', 'placeholder', 'card', 'card']],
-        [102, [32, 33], ['card', 'card', 'card', 'card', 'card', 'card']],
-      ])(name, byCase('right', 0)));
-    describe('loadingCards: 1', () =>
-      test.each([
-        [99, [0, 1], ['card', 'card', 'card', 'card', 'card', 'card']],
-        [99, [31, 32], ['card', 'card', 'card', 'card', 'card', 'card']],
-        [99, [32, 33], ['card', 'card', 'card', 'placeholder', 'placeholder', 'loading']],
-        [100, [32, 33], ['card', 'card', 'card', 'placeholder', 'card', 'loading']],
-        [101, [32, 33], ['card', 'card', 'card', 'card', 'card', 'loading']],
-      ])(name, byCase('right', 1)));
-  });
-  describe('lastRowAlign: inherit', () => {
-    describe('loadingCards: 0', () =>
-      test.each([
-        [99, [0, 1], ['card', 'card', 'card', 'card', 'card', 'card']],
-        [100, [31, 32], ['card', 'card', 'card', 'card', 'card', 'card']],
-        [100, [32, 33], ['card', 'card', 'card', 'card']],
-        [101, [32, 33], ['card', 'card', 'card', 'card', 'card']],
-        [102, [32, 33], ['card', 'card', 'card', 'card', 'card', 'card']],
-      ])(name, byCase('inherit', 0)));
-    describe('loadingCards: 1', () =>
-      test.each([
-        [99, [0, 1], ['card', 'card', 'card', 'card', 'card', 'card']],
-        [99, [31, 32], ['card', 'card', 'card', 'card', 'card', 'card']],
-        [99, [32, 33], ['card', 'card', 'card', 'loading']],
-        [100, [32, 33], ['card', 'card', 'card', 'card', 'loading']],
-        [101, [32, 33], ['card', 'card', 'card', 'card', 'card', 'loading']],
-      ])(name, byCase('inherit', 1)));
+  describe('empty ranges', () => {
+    test('rowCount 0 gives last < first', () => {
+      const [first, last] = getRowRange(0, 330, 200, 0, card, spacing(8));
+      expect(last).toBeLessThan(first);
+    });
+    test('a negative margin larger than the view gives last < first', () => {
+      const [first, last] = getRowRange(1108, 100, -100, 100, card, spacing(8));
+      expect(last).toBeLessThan(first);
+    });
   });
 });
+
+describe('getRenderRange(offset, viewHeight, overScanPx, rowCount, card, spacing)', () => {
+  const card: Rect = { width: 100, height: 100 };
+  const spacing: Spacing = { x: 8, y: 8, top: 8, bottom: 8, left: 8, right: 8 };
+  const offsets = range(5001);
+
+  test('covers every row getRowRange returns', () => {
+    for (const offset of offsets) {
+      const [first, last] = getRowRange(offset, 330, 200, 100, card, spacing);
+      const [renderFirst, renderLast] = getRenderRange(offset, 330, 200, 100, card, spacing);
+      expect(renderFirst).toBe(first);
+      expect(renderLast).toBeGreaterThanOrEqual(last);
+    }
+  });
+
+  test('changes only when its first row changes', () => {
+    let prev = getRenderRange(0, 330, 200, 100, card, spacing);
+    for (const offset of offsets.slice(1)) {
+      const next = getRenderRange(offset, 330, 200, 100, card, spacing);
+      expect(next[1] !== prev[1] || next[0] !== prev[0]).toBe(next[0] !== prev[0]);
+      prev = next;
+    }
+  });
+
+  test('clamps the last row to rowCount - 1', () => {
+    expect(getRenderRange(10500, 330, 200, 100, card, spacing)).toEqual([95, 99]);
+    expect(getRenderRange(0, 330, 200, 2, card, spacing)).toEqual([0, 1]);
+  });
+
+  test('rowCount 0 gives an empty range', () => {
+    const [first, last] = getRenderRange(0, 330, 200, 0, card, spacing);
+    expect(last).toBeLessThan(first);
+  });
+});
+
+describe('getIndexRange(rows, cols, count)', () =>
+  test.each`
+    case                        | rows        | cols | count  | expected
+    ${'full range'}             | ${[2, 4]}   | ${3} | ${100} | ${[6, 15]}
+    ${'partial last row'}       | ${[32, 33]} | ${3} | ${100} | ${[96, 100]}
+    ${'loading cards included'} | ${[32, 33]} | ${3} | ${102} | ${[96, 102]}
+    ${'empty range'}            | ${[5, 4]}   | ${3} | ${100} | ${[0, 0]}
+    ${'no columns'}             | ${[0, 3]}   | ${0} | ${100} | ${[0, 0]}
+  `('$case: rows $rows, cols $cols, count $count => $expected', ({ rows, cols, count, expected }) =>
+    expect(getIndexRange(rows, cols, count)).toEqual(expected),
+  ));
 
 describe('getNextOffset', () =>
   test.each([
