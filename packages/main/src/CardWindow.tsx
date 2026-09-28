@@ -283,8 +283,10 @@ const readColumnCount = (grid: HTMLElement | null): number => {
   return value.split(/\s+/).length;
 };
 
+// Item is not generic because React.memo drops type parameters. The signature of CardWindow already makes
+// `children` and `data` agree, so Item takes any card.
 type ItemProps = {
-  Children: React.ComponentType<CardProps>;
+  Children: React.ComponentType<CardProps<any>>;
   data: any[];
   index: number;
   row: number;
@@ -316,11 +318,10 @@ type Latest = {
 
 const sameRange = (a: [number, number], b: [number, number]) => a[0] === b[0] && a[1] === b[1];
 
-/**
- * Renders the cards of `data` that fall in the rows filling its scroll container, plus `overScanPx` above and below.
- * The `ref` receives the scroll container element.
- */
-const CardWindow = React.forwardRef<HTMLDivElement, CardWindowProps>((props, parentRef) => {
+const CardWindowRender = <T extends any[]>(
+  props: CardWindowProps<T>,
+  parentRef: React.ForwardedRef<HTMLDivElement>,
+) => {
   const {
     data,
     cardRect: card,
@@ -559,6 +560,14 @@ const CardWindow = React.forwardRef<HTMLDivElement, CardWindowProps>((props, par
       </div>
     </div>
   );
-});
+};
+
+/**
+ * Renders the cards of `data` that fall in the rows filling its scroll container, plus `overScanPx` above and below.
+ * The `ref` receives the scroll container element.
+ */
+const CardWindow = React.forwardRef(CardWindowRender) as <T extends any[] = any[]>(
+  props: CardWindowProps<T> & React.RefAttributes<HTMLDivElement>,
+) => React.ReactElement | null;
 
 export default CardWindow;
