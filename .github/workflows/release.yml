@@ -8,7 +8,27 @@ permissions:
   contents: read
 
 jobs:
+  # This fails fast, before the CI run below.
+  check-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check that the tag matches the package version
+        run: |
+          version=$(node -p "require('./packages/main/package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $version"
+            exit 1
+          fi
+
+  ci:
+    needs: check-tag
+    uses: ./.github/workflows/ci.yml
+
   publish:
+    needs: ci
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -26,15 +46,8 @@ jobs:
       - run: npm install -g npm@^11.5.1
       # The moving v6 tag predates pnpm 12 support, which came in v6.1.0.
       - uses: pnpm/action-setup@v6.1.0
-      - name: Check that the tag matches the package version
-        run: |
-          version=$(node -p "require('./packages/main/package.json').version")
-          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "Tag $GITHUB_REF_NAME does not match package version $version"
-            exit 1
-          fi
+      # The ci job ran the tests on this commit. npm publish still builds through prepack.
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test
       - name: Publish
         working-directory: packages/main
         run: npm publish
