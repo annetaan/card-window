@@ -18,7 +18,7 @@ Phases run in this order. Phase 4 changes the API, so the docs wait for it.
 | 1 | Ownership transfer | Done |
 | 2 | Tooling and CI | Done |
 | 3 | Browser tests before the rewrite | Done |
-| 4 | Performance rewrite, released as 2.0.0 | Done. 2.0.0 not yet published |
+| 4 | Performance rewrite, released as 2.0.0 | Done |
 | 5 | Astro docs site | Not started |
 
 ## Phase 1. Ownership transfer (done)
@@ -60,11 +60,11 @@ The rule for this phase is to leave the library source alone. The package that c
 - `packages/website`: Docusaurus 2.0.0-beta.18. It is replaced in phase 5.
 - `smoke/`: a standalone npm package outside the pnpm workspace. `npm run use:local` clears `smoke/dist`, packs `packages/main` into it and installs the tarball.
 - `.github/workflows/ci.yml` runs on pull requests and pushes to `main`, on Node 24 with pnpm from `pnpm/action-setup@v6.1.0`. It runs oxlint, the oxfmt check, typecheck, test, build, arethetypeswrong and the smoke test against the packed tarball. It replaced `main.yml`, which failed on every PR: first on the retired cache service behind `actions/setup-node@v2`, and after step 1 because its `cache: yarn` ran `yarn cache dir`, which rejects `packageManager: pnpm@12.6.0`. The whole job runs as a matrix on React 18 and 19, shown as `ci (18)` and `ci (19)`, with `fail-fast: false`. The 18 leg uses the lockfile. The 19 leg switches to the latest React 19 right after the frozen install, so every later step runs on it.
-- `.github/workflows/release.yml` installs and tests with pnpm through `pnpm/action-setup@v6.1.0`. The moving `v6` tag predates pnpm 12 support. It still publishes with `npm publish` in `packages/main`. The `v1.11.0` tag proved it end to end in run 36319590312. `publish` ran 162 tests and published with Trusted Publishing and provenance. `smoke` passed against the published 1.11.0. The registry took about 3 minutes to serve the new version. The wait allows about 5, with 30 tries 10 seconds apart. The run warned that `actions/checkout@v4` and `actions/setup-node@v4` target Node 20, which GitHub deprecated. `release.yml` now uses v7 of both, and its checkout sets `persist-credentials: false`, as in `ci.yml`. No tag has run it on v7 yet, so the next release tag verifies it. That run should show neither the Node 20 warning nor npm's `Unknown user config "always-auth"` warning. setup-node v7 no longer exports a placeholder `NODE_AUTH_TOKEN`, so `pnpm install` warns `Failed to replace env in config: ${NODE_AUTH_TOKEN}`. The warning is expected. A local run of pnpm 12.6.0 with the same `.npmrc` printed it and still installed and passed the tests. Before it publishes, npm exchanges the GitHub OIDC token for a publish token and uses it in place of the token from `.npmrc`, without writing the file.
+- `.github/workflows/release.yml` installs and tests with pnpm through `pnpm/action-setup@v6.1.0`. The moving `v6` tag predates pnpm 12 support. It still publishes with `npm publish` in `packages/main`. The `v1.11.0` tag proved it end to end in run 36319590312. `publish` ran 162 tests and published with Trusted Publishing and provenance. `smoke` passed against the published 1.11.0. The registry took about 3 minutes to serve the new version. The wait allows about 5, with 30 tries 10 seconds apart. The run warned that `actions/checkout@v4` and `actions/setup-node@v4` target Node 20, which GitHub deprecated. `release.yml` now uses v7 of both, and its checkout sets `persist-credentials: false`, as in `ci.yml`. The `v2.0.0` tag was the first to run it on v7, in run 36397461430, and both jobs passed. The log showed neither the Node 20 warning nor npm's `Unknown user config "always-auth"` warning. setup-node v7 no longer exports a placeholder `NODE_AUTH_TOKEN`, so pnpm warns `Failed to replace env in config: ${NODE_AUTH_TOKEN}`. The warning is expected. That run printed it 3 times, once in `pnpm install` and twice in `pnpm test`. A local run of pnpm 12.6.0 with the same `.npmrc` printed it and still installed and passed the tests. Before it publishes, npm exchanges the GitHub OIDC token for a publish token and uses it in place of the token from `.npmrc`, without writing the file.
 - `.vscode/settings.json` was deleted in step 5. The repository has no editor settings.
-- Dev React is 18.3.1, a devDependency of `packages/main`, with `@types/react` 18.3.31 and `@types/react-dom` 18.3.7. `@testing-library/react` is 16.3.3 with `@testing-library/dom` 10.4.2, and it supports React 18 and 19. The peer range is `>=16.13.0 <20`. React 16.13 and 17 are inside it, but nothing tests them. `@testing-library/react` 16 cannot run on React 17. The smoke test uses React 18 unless React 19 is passed to `use:local`. 2.0.0 narrows the peer to `>=18.0.0 <20`. See "Release 2.0.0" in phase 4.
-- `version` in `packages/main/package.json` is 1.11.0, and 1.11.0 is npm `latest`. Its peer range is `>=16.13.0 <20`. The release PR sets `version` to 2.0.0, and npm `latest` stays 1.11.0 until the tag. See "Release 2.0.0" in phase 4.
-- `README.md` and `packages/main/README.md` have a Requirements section. Both describe 1.11.0, which is on npm. From the merge of the release PR they describe 2.0.0. See "Release 2.0.0" in phase 4.
+- Dev React is 18.3.1, a devDependency of `packages/main`, with `@types/react` 18.3.31 and `@types/react-dom` 18.3.7. `@testing-library/react` is 16.3.3 with `@testing-library/dom` 10.4.2, and it supports React 18 and 19. Through 1.11.0 the peer range was `>=16.13.0 <20`. React 16.13 and 17 were inside it, but nothing tested them. `@testing-library/react` 16 cannot run on React 17. The smoke test uses React 18 unless React 19 is passed to `use:local`. 2.0.0 narrowed the peer to `>=18.0.0 <20`. See "Release 2.0.0" in phase 4.
+- `version` in `packages/main/package.json` is 2.0.0, and 2.0.0 is npm `latest`. Its peer range is `>=18.0.0 <20`. 1.11.0, with `>=16.13.0 <20`, still installs as `@annetaan/card-window@1`. See "Release 2.0.0" in phase 4.
+- `README.md` and `packages/main/README.md` have a Requirements section. Both describe 2.0.0, which is on npm.
 
 ### Steps
 
@@ -304,32 +304,26 @@ It holds. On #76, run 36391298156 on `eb5ee86` passed `ci (18)` and `ci (19)`, a
 
 ### Release 2.0.0
 
-Half done. The release PR does this:
+Done. #77 did this:
 
-- bumps `version` in `packages/main/package.json` to 2.0.0 (`769e4e2`)
-- narrows the peer range of `react` and `react-dom` to `>=18.0.0 <20`
-- rewrites the Requirements section in both READMEs
-- switches the usage example to `createRoot` from `react-dom/client`, with `type CardProps`
-- notes under the "Learn more" link that annetaan.github.io still describes 1.x
-- adds "Upgrading from 1.x" to both READMEs (`4969ba2`)
+- bumped `version` in `packages/main/package.json` to 2.0.0 (`769e4e2`)
+- narrowed the peer range of `react` and `react-dom` to `>=18.0.0 <20`
+- rewrote the Requirements section in both READMEs
+- switched the usage example to `createRoot` from `react-dom/client`, with `type CardProps`
+- noted under the "Learn more" link that annetaan.github.io still describes 1.x
+- added "Upgrading from 1.x" to both READMEs (`4969ba2`)
 
 I checked this on the branch. `pnpm-lock.yaml` did not change. `lib/` from `pnpm build` is byte-identical to a build of `a823007`. `npm pack` lists 6 files at version 2.0.0. The smoke test passes against the local 2.0.0 tarball.
 
-After the merge, in this order. Every step that pushes a tag or touches npm needs michiharu's go-ahead.
+#77 merged as `55a5cf7`. Push run 36396904920 on it passed `ci (18)` and `ci (19)`. That run is the only one that covers the browser tests, because `release.yml` runs only `pnpm test`. michiharu then pushed the `v2.0.0` tag on `55a5cf7`. Run 36397461430 of `release.yml` passed both jobs. `publish` checked the tag against `version`, ran 93 tests and published 2.0.0 with provenance through Trusted Publishing. The provenance uses `https://slsa.dev/provenance/v1`. `smoke` passed against the published 2.0.0. The registry answered 404 8 times, 10 seconds apart, and served 2.0.0 about 90 seconds after the publish. 1.11.0 took about 3 minutes.
 
-1. Check that CI on the merge commit passed `ci (18)` and `ci (19)`. `release.yml` runs only `pnpm test`, so that CI run is the only one that covers the browser tests.
-2. Push `v2.0.0` on the merge commit.
-3. `release.yml` checks the tag against `version`, runs the unit tests, publishes with provenance through Trusted Publishing, waits for the registry and runs the smoke test against the published 2.0.0.
-4. This is the first tag to run on checkout and setup-node v7. The log should show neither the Node 20 deprecation warning nor `Unknown user config "always-auth"`. `Failed to replace env in config: ${NODE_AUTH_TOKEN}` is expected, for the reason in the `release.yml` bullet under "Where things stand" in phase 2. Check that the package has provenance.
-5. `npm view @annetaan/card-window dist-tags` shows `latest: 2.0.0`. 1.11.0 stays installable as `@annetaan/card-window@1`, and `^1` ranges do not move.
-6. Create the GitHub Release `v2.0.0` by hand. Its body is the "What changes for consumers" section of the PR, with each heading one level up, as for 1.11.0.
-7. Record the release in a follow-up PR, as #72 did for 1.11.0.
+It was the first tag to run on checkout and setup-node v7. The log showed neither the Node 20 deprecation warning nor `Unknown user config "always-auth"`. `Failed to replace env in config: ${NODE_AUTH_TOKEN}` appeared 3 times, as expected. The `release.yml` bullet under "Where things stand" in phase 2 says why. The only annotations were a notice on each job that `ubuntu-latest` moves to Ubuntu 26 from 2026-10-19.
 
-If `publish` fails before `npm publish`, nothing reached npm. Fix it on `main`, then delete the tag and push it again, with michiharu's go-ahead. If it fails after `npm publish`, 2.0.0 is taken for good, and the fix ships as 2.0.1.
+npm `latest` is 2.0.0, with the peer range `>=18.0.0 <20`. `@annetaan/card-window@1` still installs 1.11.0, so `^1` ranges do not move. The GitHub Release v2.0.0 was created by hand with michiharu's go-ahead. Its body is the "What changes for consumers" section of #77, with each heading one level up. It is marked Latest.
 
-Phase 5 follows.
+Phase 5 is next.
 
-PRs: #76 CSS Grid layout and scrolling.
+PRs: #76 CSS Grid layout and scrolling, #77 release 2.0.0, #78 release record.
 
 ## Phase 5. Astro docs site
 
@@ -376,7 +370,7 @@ Decided on 2026-09-27.
 - The peer range was widened to `<20` in the same PR, after `ci (18)` and `ci (19)` passed on the old range.
 - Release notes for 1.11.0: a GitHub Release, created by hand after the publish succeeds, with its body taken from the PR. No CHANGELOG file.
 - The READMEs get a short Requirements section in 1.11.0. The usage examples stay as they are.
-- `release.yml` moves `actions/checkout` and `actions/setup-node` from v4 to v7, the versions `ci.yml` uses. It is a follow-up in its own PR, after phase 2, and does not reopen it. `release.yml` runs only on a tag, so the next release tag verifies the change. Done.
+- `release.yml` moves `actions/checkout` and `actions/setup-node` from v4 to v7, the versions `ci.yml` uses. It is a follow-up in its own PR, after phase 2, and does not reopen it. `release.yml` runs only on a tag, so the next release tag verifies the change. Done. The `v2.0.0` tag verified it in run 36397461430.
 - The checkout in `release.yml` sets `persist-credentials: false`, as `ci.yml` does. Nothing in `release.yml` uses git credentials, so the GitHub token is not left where scripts that run before the publish can read it.
 
 Decided on 2026-09-28.
