@@ -199,3 +199,95 @@ describe('onScroll', () => {
     await expect.poll(() => onScroll.mock.lastCall?.[0].indexesOfVisible).toEqual(range(15, 24));
   });
 });
+
+describe('rendering', () => {
+  // At 1108 the render range with the default 200px overscan is rows 8 to 15,
+  // and at 1118 it is still rows 8 to 15, so that scroll must not render any
+  // card. At 2000 the range moves, so new cards render.
+  test('re-renders cards only when the row range changes', async () => {
+    const renders = vi.fn();
+    const CountingCard = ({ index, style }: CardProps) => {
+      renders();
+      return <div data-card-index={index} style={style} />;
+    };
+    const screen = await render(
+      <div data-testid="frame" style={{ width: 400, height: 330 }}>
+        <CardWindow cardRect={cardRect} data={range(300)}>
+          {CountingCard}
+        </CardWindow>
+      </div>,
+    );
+    const frame = screen.container.querySelector('[data-testid="frame"]') as HTMLElement;
+    const scroller = frame.firstElementChild as HTMLElement;
+    await expect.poll(() => columnCount(scroller)).toBe(3);
+    scroller.scrollTop = 1108;
+    await expect.poll(() => indexesInView(scroller)).toEqual(range(30, 42));
+    await nextFrames();
+    const before = renders.mock.calls.length;
+    scroller.scrollTop = 1118;
+    await nextFrames();
+    await nextFrames();
+    expect(renders.mock.calls.length).toBe(before);
+    scroller.scrollTop = 2000;
+    await expect.poll(() => renders.mock.calls.length).toBeGreaterThan(before);
+  });
+
+  // At the end of 300 cards in 3 columns, cards 291 to 299 are in view. At
+  // 530px the grid has 4 columns and the content gets shorter, so the browser
+  // clamps scrollTop. The offset must follow the cards, not the clamp.
+  test('keeps the last card in view when a wider frame adds a column', async () => {
+    const { frame, scroller } = await renderCardWindow(400, 330, { data: range(300) });
+    await expect.poll(() => columnCount(scroller)).toBe(3);
+    scroller.scrollTop = scroller.scrollHeight;
+    await expect.poll(() => indexesInView(scroller)).toContain(299);
+    frame.style.width = '530px';
+    await expect.poll(() => columnCount(scroller)).toBe(4);
+    await nextFrames();
+    expect(indexesInView(scroller)).toContain(299);
+  });
+});
+
+describe('classic scrollbar', () => {
+  // The root reserves a stable scrollbar gutter. Headless Chromium hides the
+  // scrollbar itself, but the gutter still takes the 15px the style below
+  // gives the scrollbar, as a classic scrollbar would. The widths above still
+  // fit the same column counts with 15px less content width. A reserved gutter
+  // also means the scrollbar showing up does not resize the observed content
+  // box, which with a visible classic scrollbar used to fire a window error,
+  // "ResizeObserver loop completed with undelivered notifications".
+  const withClassicScrollbar = async (run: (errors: string[]) => Promise<void>) => {
+    const style = document.createElement('style');
+    style.textContent = '.classic-scrollbar::-webkit-scrollbar { width: 15px; }';
+    document.head.appendChild(style);
+    const errors: string[] = [];
+    const onError = (e: ErrorEvent) => errors.push(e.message);
+    window.addEventListener('error', onError);
+    try {
+      await run(errors);
+    } finally {
+      window.removeEventListener('error', onError);
+      style.remove();
+    }
+  };
+
+  test.each([
+    [180, 1],
+    [280, 2],
+    [400, 3],
+    [600, 5],
+    [820, 7],
+  ])('%ipx wide with a 15px gutter fits %i columns', (width, expected) =>
+    withClassicScrollbar(async (errors) => {
+      const { frame, scroller } = await renderCardWindow(width, 300, {
+        data: range(100),
+        root: { className: 'classic-scrollbar' },
+      });
+      await expect.poll(() => columnCount(scroller)).toBe(expected);
+      expect(scroller.offsetWidth - scroller.clientWidth).toBe(15);
+      frame.style.width = `${width + 108}px`;
+      await expect.poll(() => columnCount(scroller)).toBe(expected + 1);
+      await nextFrames();
+      expect(errors).toEqual([]);
+    }),
+  );
+});

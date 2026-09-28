@@ -20,9 +20,8 @@ import CardWindow, {
 const {
   getColumns,
   getScrollContainerHeight,
-  getRenderFirstRow,
   getLastRowFromLength,
-  getRows,
+  getRowRange,
   getRenderContainerStyle,
   getBaseItemProps,
   getItemProps,
@@ -184,25 +183,6 @@ describe('getScrollContainerHeight(cols, length, card, spacing, loading)', () =>
     ])(name, byCase(2, undefined)));
 });
 
-describe('getRenderFirstRow', () =>
-  test.each`
-    offset | overScanPx | expected
-    ${0}   | ${0}       | ${0}
-    ${109} | ${0}       | ${0}
-    ${110} | ${0}       | ${1}
-    ${219} | ${0}       | ${1}
-    ${220} | ${0}       | ${2}
-    ${0}   | ${200}     | ${0}
-    ${309} | ${200}     | ${0}
-    ${310} | ${200}     | ${1}
-    ${419} | ${200}     | ${1}
-    ${420} | ${200}     | ${2}
-  `('offset: $offset, overScanPx: $overScanPx, expected: $expected', ({ offset, overScanPx, expected }) => {
-    const card: Rect = { width: 0, height: 100 };
-    const spacing: Spacing = { x: 0, y: 10, top: 10, bottom: 10, left: 0, right: 0 };
-    expect(getRenderFirstRow(offset, overScanPx, card, spacing)).toEqual(expected);
-  }));
-
 describe('getLastRowFromLength', () => {
   const name = 'length: $length, loadingCards: $loadingCards, expected: $expected';
   const byCase =
@@ -241,35 +221,58 @@ describe('getLastRowFromLength', () => {
     `(name, byCase(2)));
 });
 
-describe('getRows', () => {
-  const name = 'offset: %p, length: %p, loadingCard: %p, cols: %p => %p';
-  const byCase = (overScanPx: number) => (offset, length, loadingCards, cols, expected) => {
-    const containerHeight = 200;
-    const card: Rect = { width: 0, height: 100 };
-    const spacing: Spacing = { x: 0, y: 0, top: 0, bottom: 0, left: 0, right: 0 };
-    const result = getRows(length, loadingCards, cols, offset, overScanPx, containerHeight, card, spacing);
-    expect(result).toEqual(expected);
-  };
+describe('getRowRange(offset, viewHeight, margin, rowCount, card, spacing)', () => {
+  // Row r spans [top + 108r, top + 108r + 100].
+  const card: Rect = { width: 100, height: 100 };
+  const spacing = (top: number): Spacing => ({ x: 8, y: 8, top, bottom: 8, left: 8, right: 8 });
+  const name = 'offset: $offset, viewHeight: $viewHeight, margin: $margin, rowCount: $rowCount, top: $top => $expected';
+  const byCase = ({ offset, viewHeight, margin, rowCount, top, expected }) =>
+    expect(getRowRange(offset, viewHeight, margin, rowCount, card, spacing(top))).toEqual(expected);
 
-  describe('overScanPx: 0', () =>
-    test.each([
-      [0, 3, 0, 3, [0, 0]],
-      [0, 4, 0, 3, [0, 1]],
-      [99, 100, 0, 3, [0, 2]],
-      [100, 100, 0, 3, [1, 3]],
-      [3299, 100, 0, 3, [32, 33]],
-      [3300, 100, 0, 3, [33, 33]],
-    ])(name, byCase(0)));
+  describe('render range with overscan', () =>
+    test.each`
+      offset  | viewHeight | margin | rowCount | top  | expected
+      ${1108} | ${330}     | ${200} | ${100}   | ${8} | ${[8, 15]}
+      ${1118} | ${330}     | ${200} | ${100}   | ${8} | ${[8, 15]}
+      ${1171} | ${330}     | ${200} | ${100}   | ${8} | ${[8, 15]}
+      ${1172} | ${330}     | ${200} | ${100}   | ${8} | ${[9, 15]}
+      ${1108} | ${330}     | ${0}   | ${100}   | ${8} | ${[10, 13]}
+    `(name, byCase));
 
-  describe('overScanPx: 200', () =>
-    test.each([
-      [0, 3, 0, 3, [0, 0]],
-      [0, 4, 0, 3, [0, 1]],
-      [299, 100, 0, 3, [0, 6]],
-      [300, 100, 0, 3, [1, 7]],
-      [3299, 100, 0, 3, [30, 33]],
-      [3300, 100, 0, 3, [31, 33]],
-    ])(name, byCase(200)));
+  describe('spacing.top shifts the rows', () =>
+    test.each`
+      offset | viewHeight | margin | rowCount | top   | expected
+      ${210} | ${100}     | ${0}   | ${100}   | ${0}  | ${[2, 2]}
+      ${210} | ${100}     | ${0}   | ${100}   | ${50} | ${[1, 2]}
+      ${120} | ${100}     | ${0}   | ${100}   | ${0}  | ${[1, 2]}
+      ${120} | ${100}     | ${0}   | ${100}   | ${50} | ${[0, 1]}
+    `(name, byCase));
+
+  describe('visible range with a negative margin', () =>
+    test.each`
+      offset  | viewHeight | margin | rowCount | top  | expected
+      ${1108} | ${330}     | ${-50} | ${100}   | ${8} | ${[10, 12]}
+      ${500}  | ${330}     | ${-50} | ${100}   | ${8} | ${[5, 7]}
+    `(name, byCase));
+
+  describe('clamping', () =>
+    test.each`
+      offset   | viewHeight | margin | rowCount | top  | expected
+      ${0}     | ${330}     | ${200} | ${100}   | ${8} | ${[0, 4]}
+      ${10500} | ${330}     | ${200} | ${100}   | ${8} | ${[95, 99]}
+      ${0}     | ${330}     | ${200} | ${2}     | ${8} | ${[0, 1]}
+    `(name, byCase));
+
+  describe('empty ranges', () => {
+    test('rowCount 0 gives last < first', () => {
+      const [first, last] = getRowRange(0, 330, 200, 0, card, spacing(8));
+      expect(last).toBeLessThan(first);
+    });
+    test('a negative margin larger than the view gives last < first', () => {
+      const [first, last] = getRowRange(1108, 100, -100, 100, card, spacing(8));
+      expect(last).toBeLessThan(first);
+    });
+  });
 });
 
 describe('getRenderContainerStyle', () => {

@@ -1,15 +1,6 @@
 import * as React from 'react';
-import {
-  CSSProperties,
-  Fragment,
-  RefObject,
-  UIEventHandler,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from 'react';
+import { CSSProperties, Fragment, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 
 /** CardWindow provides the `CardWindow.children` component with this props. */
 export type CardProps<T extends any[] = any[]> = {
@@ -239,37 +230,29 @@ const getScrollContainerHeight = (
   return top + rows * (card.height + y) + loading.height + bottom;
 };
 
-const getRenderFirstRow = (offset: number, overScanPx: number, card: Rect, spacing: Spacing): number =>
-  Math.max(0, Math.floor((offset - overScanPx) / (card.height + spacing.y)));
-
-const getRenderLastRow = (
-  offset: number,
-  containerHeight: number,
-  overScanPx: number,
-  card: Rect,
-  { y }: Spacing,
-): number => Math.floor((offset + containerHeight + overScanPx) / (card.height + y));
-
 const getLastRowFromLength = (length: number, loadingCards: number, cols: number): number => {
   if (length === 0) return 0;
   return Math.ceil((length + loadingCards) / cols) - 1;
 };
 
-const getRows = (
-  length: number,
-  loadingCards: number,
-  cols: number,
+/**
+ * The rows that intersect `[offset - margin, offset + viewHeight + margin]`, clamped to `[0, rowCount - 1]`.
+ * Row r spans `[spacing.top + r * pitch, spacing.top + r * pitch + card.height]`. The range is empty when `last < first`.
+ */
+const getRowRange = (
   offset: number,
-  overScanPx: number,
-  containerHeight: number,
+  viewHeight: number,
+  margin: number,
+  rowCount: number,
   card: Rect,
   spacing: Spacing,
 ): [number, number] => {
-  const first = getRenderFirstRow(offset, overScanPx, card, spacing);
-  const last = Math.min(
-    getRenderLastRow(offset, containerHeight, overScanPx, card, spacing),
-    getLastRowFromLength(length, loadingCards, cols),
-  );
+  const pitch = card.height + spacing.y;
+  const lo = offset - margin;
+  const hi = offset + viewHeight + margin;
+  // The first row whose bottom is below lo, and the last row whose top is above hi.
+  const first = Math.max(0, Math.floor((lo - spacing.top - card.height) / pitch) + 1);
+  const last = Math.min(rowCount - 1, Math.ceil((hi - spacing.top) / pitch) - 1);
   return [first, last];
 };
 
@@ -308,7 +291,6 @@ type PlaceholderTypeProps = { type: 'placeholder' } & Omit<CardProps, 'data' | '
 type LoadingTypeProps = { type: 'loading' } & Omit<CardProps, 'data' | 'index'>;
 type ItemProps = CardTypeProps | PlaceholderTypeProps | LoadingTypeProps;
 export type ItemType = ItemProps['type'];
-const isCardTypeProps = (props: ItemProps): props is CardTypeProps => props.type === 'card';
 
 const getStop = (
   rows: [number, number],
@@ -375,65 +357,34 @@ const getNextOffset = (offset: number, before: number, after: number, card: Rect
 export const functions = {
   getColumns,
   getScrollContainerHeight,
-  getRenderFirstRow,
   getLastRowFromLength,
-  getRows,
+  getRowRange,
   getRenderContainerStyle,
   getBaseItemProps,
   getItemProps,
   getNextOffset,
 };
 
-/**
- * `useResizeObserver` is a custom Hook for monitoring the size of the element.
- *
- * If you give the hook an initial value for the element size, the hook will return that element size if ref is null.
- *
- * ```tsx
- * const initialSize = { width: 200, height: 100 };
- *
- * export const Example: React.FC = () => {
- *     const [{ width, height }, ref] = useResizeObserver<HTMLDivElement>();
- *
- *     if (ref.current === null) {
- *         console.log(`width: ${width}`); // 200 from initialSize
- *         console.log(`height: ${height}`); // 100 from initialSize
- *     } else {
- *         console.log(`width: ${width}`); // actual element width
- *         console.log(`height: ${height}`); // actual element height
- *     }
- *
- *     return (
- *         <div ref={ref}>
- *             ...
- *         </div>
- *     )
- * }
- * ```
- */
-export const useResizeObserver = <T extends Element>(): Partial<Rect> & { ref: RefObject<T> } => {
-  const [rect, set] = useState<Partial<Rect>>({ width: undefined, height: undefined });
-  const ref = useRef<T>(null);
-  useEffect(() => {
-    const resizeObserver = new ResizeObserver((entries) => {
-      const { width, height } = entries[0].contentRect;
-      if (width !== rect.width || height !== rect.height) set({ width, height });
-    });
-    if (ref.current) {
-      resizeObserver.observe(ref.current);
-      const { width, height } = ref.current.getBoundingClientRect();
-      if (width !== rect.width || height !== rect.height) set({ width, height });
-    }
-    return () => resizeObserver.disconnect();
-  }, []);
-  return useMemo(() => ({ ref, ...rect }), [rect]);
-};
-
-const useForceUpdate = () => useReducer((x) => x + 1, 0)[1];
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 const defaultSpacing: Spacing = { x: 8, y: 8, top: 8, bottom: 8, left: 8, right: 8 };
 
-const CardWindow: React.FC<CardWindowProps> = React.forwardRef((props, parentRef) => {
+type Latest = {
+  rows: [number, number];
+  rowCount: number;
+  viewHeight: number;
+  cols: number;
+  length: number;
+  card: Rect;
+  spacing: Spacing;
+  overScanPx: number;
+  thresholdOfVisible: number;
+  onScroll: ((props: OnScrollProps) => void) | undefined;
+};
+
+const sameRange = (a: [number, number], b: [number, number]) => a[0] === b[0] && a[1] === b[1];
+
+const CardWindow = React.forwardRef<HTMLDivElement, CardWindowProps>((props, parentRef) => {
   const {
     data,
     cardRect: card,
@@ -453,15 +404,26 @@ const CardWindow: React.FC<CardWindowProps> = React.forwardRef((props, parentRef
 
   const { length } = data;
   const spacing = { ...defaultSpacing, ...spacingProp };
-  const offsetRef = useRef(0);
-  const render = useForceUpdate();
-  const { ref, width = 0, height = 0 } = useResizeObserver<HTMLDivElement>();
-  React.useImperativeHandle(parentRef, () => () => ref.current);
-  const colsRef = useRef(0);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  useImperativeHandle(parentRef, () => scrollerRef.current as HTMLDivElement, []);
+  const [size, setSize] = useState<Rect | null>(null);
+  const [offset, setOffset] = useState(0);
+  const width = size?.width ?? 0;
+  const viewHeight = size?.height ?? 0;
   const cols = getColumns(width, card.width, spacing, justify, maxCols);
   const loadingCards = getLoadingCardCount(loading);
+  const rowCount = cols === 0 || length + loadingCards === 0 ? 0 : getLastRowFromLength(length, loadingCards, cols) + 1;
   const scrollContainerHeight = getScrollContainerHeight(cols, length + loadingCards, card, spacing, loading);
-  const rootStyle = { width: '100%', minWidth: card.width, height: '100%', ...root.style, overflow: 'auto' };
+  // A stable gutter keeps the content box the same width whether or not a classic scrollbar shows, so the
+  // first render inside the ResizeObserver callback does not resize what that callback observes.
+  const rootStyle: CSSProperties = {
+    width: '100%',
+    minWidth: card.width,
+    height: '100%',
+    scrollbarGutter: 'stable',
+    ...root.style,
+    overflow: 'auto',
+  };
   const scrollContainerStyle: CSSProperties = {
     ...container.style,
     width: '100%',
@@ -469,54 +431,105 @@ const CardWindow: React.FC<CardWindowProps> = React.forwardRef((props, parentRef
     paddingRight: spacing.right,
     height: scrollContainerHeight,
   };
-  const rows = getRows(length, loadingCards, cols, offsetRef.current, overScanPx, height, card, spacing);
+  const rows = getRowRange(offset, viewHeight, overScanPx, rowCount, card, spacing);
   const items = getItemProps(length, loadingCards, cols, rows, card, spacing, justify, lastRowAlign);
-
-  const handleScroll: UIEventHandler<HTMLDivElement> = (e) => {
-    const scrollOffset = e.currentTarget.scrollTop;
-    const scrollDirection: ScrollDirection = scrollOffset < offsetRef.current ? 'backward' : 'forward';
-    offsetRef.current = scrollOffset;
-    const first = getRenderFirstRow(offsetRef.current, overScanPx, card, spacing);
-    const scrollUpdateWasRequested = rows[0] !== first;
-    if (scrollUpdateWasRequested) render();
-    if (!onScroll) return;
-    const negativeOverScanPx = -card.height * thresholdOfVisible;
-    const visibleRows = getRows(
-      length,
-      loadingCards,
-      cols,
-      offsetRef.current,
-      negativeOverScanPx,
-      height,
-      card,
-      spacing,
-    );
-    const visibleItems = getItemProps(
-      length,
-      loadingCards,
-      cols,
-      visibleRows,
-      card,
-      spacing,
-      justify,
-      lastRowAlign,
-    ).filter(isCardTypeProps);
-    const onScrollProps: OnScrollProps = {
-      direction: scrollDirection,
-      offset: scrollOffset,
-      updateWasRequested: scrollUpdateWasRequested,
-      indexesOfVisible: visibleItems.map((v) => v.index),
-    };
-    onScroll(onScrollProps);
-  };
   const renderContainerStyle = getRenderContainerStyle(rows[0], card, spacing, justify);
 
-  useEffect(() => {
-    if (colsRef.current !== cols && colsRef.current !== 0 && cols !== 0 && ref.current) {
-      ref.current.scrollTop = getNextOffset(offsetRef.current, colsRef.current, cols, card, spacing);
+  // The first observation arrives before the first paint, and flushSync renders the cards before that paint too.
+  useIsomorphicLayoutEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return undefined;
+    const observer = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      flushSync(() =>
+        setSize((prev) => (prev && prev.width === width && prev.height === height ? prev : { width, height })),
+      );
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // The last scrollTop the scroll handler saw. Only the scroll handler writes it.
+  const lastScrollTop = useRef(0);
+
+  // Keep the first visible card in view when the column count changes. The live scrollTop may already be
+  // clamped to the shorter sizer of this commit, so start from the last position the scroll handler saw.
+  // Its rAF callback runs before the ResizeObserver callback in a frame, so no scroll is missed.
+  const prevColsRef = useRef(0);
+  useIsomorphicLayoutEffect(() => {
+    const prev = prevColsRef.current;
+    prevColsRef.current = cols;
+    const el = scrollerRef.current;
+    if (el && prev !== cols && prev !== 0 && cols !== 0) {
+      el.scrollTop = getNextOffset(lastScrollTop.current, prev, cols, card, spacing);
     }
-    colsRef.current = cols;
   }, [cols]);
+
+  // The scroll handler reads what it needs from here. It is written after every commit, never during render.
+  const latest = useRef<Latest | null>(null);
+  useIsomorphicLayoutEffect(() => {
+    latest.current = {
+      rows,
+      rowCount,
+      viewHeight,
+      cols,
+      length,
+      card,
+      spacing,
+      overScanPx,
+      thresholdOfVisible,
+      onScroll,
+    };
+    // The offset state only changes with the row range, so it can lag scrollTop by less than a row.
+    // After a resize or a data change, derive the range from the real scrollTop again.
+    const el = scrollerRef.current;
+    if (!el) return;
+    const next = getRowRange(el.scrollTop, viewHeight, overScanPx, rowCount, card, spacing);
+    if (!sameRange(next, rows)) setOffset(el.scrollTop);
+  });
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return undefined;
+    let frame: number | null = null;
+    const update = () => {
+      frame = null;
+      const current = latest.current;
+      if (!current) return;
+      const scrollTop = el.scrollTop;
+      const next = getRowRange(
+        scrollTop,
+        current.viewHeight,
+        current.overScanPx,
+        current.rowCount,
+        current.card,
+        current.spacing,
+      );
+      const changed = !sameRange(next, current.rows);
+      if (changed) setOffset(scrollTop);
+      if (current.onScroll) {
+        const margin = -current.card.height * current.thresholdOfVisible;
+        const vis = getRowRange(scrollTop, current.viewHeight, margin, current.rowCount, current.card, current.spacing);
+        const indexesOfVisible =
+          vis[1] < vis[0] ? [] : range(vis[0] * current.cols, Math.min((vis[1] + 1) * current.cols, current.length));
+        current.onScroll({
+          direction: scrollTop < lastScrollTop.current ? 'backward' : 'forward',
+          offset: scrollTop,
+          updateWasRequested: changed,
+          indexesOfVisible,
+        });
+      }
+      lastScrollTop.current = scrollTop;
+    };
+    const schedule = () => {
+      if (frame === null) frame = requestAnimationFrame(update);
+    };
+    el.addEventListener('scroll', schedule, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', schedule);
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, []);
 
   useEffect(() => {
     if (scrollContainerHeight !== 0 && loading?.loadMore) {
@@ -526,7 +539,7 @@ const CardWindow: React.FC<CardWindowProps> = React.forwardRef((props, parentRef
   }, [scrollContainerHeight, loading?.loadMore, items]);
 
   return (
-    <div ref={ref} className={root.className} style={rootStyle} onScroll={handleScroll}>
+    <div ref={scrollerRef} className={root.className} style={rootStyle}>
       <div className={container.className} style={scrollContainerStyle}>
         <div style={renderContainerStyle}>
           {items.map((item, i) => {
