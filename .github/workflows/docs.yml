@@ -32,7 +32,7 @@ jobs:
         run: pnpm --filter website check
       - name: Build the docs site
         run: pnpm --filter website build
-      # Hidden files are left out by default, so dist/.prerender stays out of the artifact.
+      # Astro removes dist/.prerender at the end of the build, so dist holds only the site.
       - uses: actions/upload-pages-artifact@v5
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         with:
