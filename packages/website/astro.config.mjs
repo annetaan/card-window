@@ -1,6 +1,7 @@
 import react from '@astrojs/react';
 import starlight from '@astrojs/starlight';
 import { defineConfig } from 'astro/config';
+import starlightTypeDoc, { typeDocSidebarGroup } from 'starlight-typedoc';
 
 export default defineConfig({
   site: 'https://annetaan.github.io',
@@ -10,7 +11,17 @@ export default defineConfig({
       title: 'card-window',
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/annetaan/card-window' }],
       editLink: { baseUrl: 'https://github.com/annetaan/card-window/edit/main/packages/website/' },
-      sidebar: [{ label: 'Guides', items: ['intro'] }],
+      // Generates the API reference from packages/main/src into git-ignored src/content/docs/api/ on build, check, dev.
+      plugins: [
+        starlightTypeDoc({
+          entryPoints: ['../main/src/index.ts'],
+          tsconfig: '../main/tsconfig.json',
+          output: 'api',
+          sidebar: { label: 'API reference' },
+          typeDoc: { disableSources: true },
+        }),
+      ],
+      sidebar: [{ label: 'Guides', items: ['intro'] }, typeDocSidebarGroup],
     }),
     react(),
   ],

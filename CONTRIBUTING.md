@@ -17,6 +17,8 @@
 - `pnpm docs:check`: type-checks the docs site with `astro check`.
 
 Each `docs:` script builds card-window first, because the site imports it from `packages/main/lib`.
+Each `docs:` script also generates the API reference from `packages/main/src` with typedoc into `packages/website/src/content/docs/api/`, which git ignores.
+It does not regenerate while `docs:dev` runs, so restart the dev server to see changes to doc comments.
 To work on card-window and the site together, run `pnpm watch` alongside `pnpm docs:dev`.
 
 Install Chromium once before the first `pnpm test:browser` or `pnpm bench`.
