@@ -155,7 +155,7 @@ The tests pass on the source at 1.11.0. Phase 2 kept its runtime behavior equal 
 
 `src/CardWindow.browser.test.tsx` has 19 tests. `columns` has 7, `last row` 7, `scroll offset` 1, `loadMore` 3 and `onScroll` 1. `pnpm test` still reports 2 files and 162 tests passed.
 
-I ran both on this branch. On React 18.3.1, `pnpm test` reports 162 passed and `pnpm test:browser` 19 passed. In a scratch copy switched to React 19.3.0, the same two commands report the same numbers.
+I ran both on the #74 branch. On React 18.3.1, `pnpm test` reports 162 passed and `pnpm test:browser` 19 passed. In a scratch copy switched to React 19.3.0, the same two commands report the same numbers.
 
 While the tests were written, each group except `columns` was checked against a deliberate break, and it failed as expected:
 
@@ -175,7 +175,7 @@ Phase 4 keeps it, or changes it in the test helpers only.
 
 ### Notes for phase 4
 
-- The widths in the column tests sit where two rules agree. 1.11.0 gives space-evenly `floor((w - 24) / 108)` columns, and CSS Grid's `auto-fill` gives `floor((w - 8) / 108)`. Phase 4 has to decide how many columns space-evenly gets.
+- The widths in the column tests sit where two rules agree. 1.11.0 gives space-evenly `floor((w - 24) / 108)` columns, and CSS Grid's `auto-fill` gives `floor((w - 8) / 108)`. Phase 4 follows `auto-fill`. See the decisions of 2026-09-28.
 - 1.11.0 works out the visible rows in `getRenderFirstRow` and `getRenderLastRow`, and that math ignores `spacing.top`. So the scroll offsets in the tests keep every card edge and every 0.5 threshold at a distance.
 - `loadMore` and `onScroll` are asserted without exact call counts, and `onScroll` on its last call only. An `IntersectionObserver` and batching in `requestAnimationFrame` should still pass them.
 
@@ -189,9 +189,15 @@ The lockfile went from 227 `packages` entries to 246, with 19 added and none rem
 
 - `ci (18)` and `ci (19)` are green on the PR, with the `pnpm test:browser` step.
 
+It holds. On #74, `ci (18)` and `ci (19)` passed in run 36333552544, the `pnpm test:browser` step included.
+
+PRs: #74 browser tests.
+
 ## Phase 4. Performance rewrite (2.0.0)
 
-- Lay cards out with CSS Grid. `grid-template-columns: repeat(auto-fill, <width>)` with `justify-content` keeps the last row left-aligned without any JavaScript. `stretch` maps to `minmax(<width>, 1fr)`.
+- Lay cards out with CSS Grid. `grid-template-columns: repeat(auto-fill, <width>)` with `justify-content` keeps the last row left-aligned without any JavaScript. `stretch` maps to `minmax(<width>, 1fr)`. `start` and `end` are new, and they pass through to `justify-content` as `left` and `right` do. `space-evenly` gets the column count `auto-fill` gives, like every other value.
+- Remove `lastRowAlign` and the `LastRowAlign` type.
+- No grid props in the public API.
 - Scroll: a passive listener, work batched in `requestAnimationFrame`, and a state update only when the visible row range changes.
 - Resize with `ResizeObserver`. Infinite loading with an `IntersectionObserver` on a sentinel element.
 - Measure before and after. Record the numbers in the PR.
@@ -251,10 +257,14 @@ Decided on 2026-09-28.
 - `pnpm test` stays jsdom only. `pnpm test:browser` is a separate script. `release.yml` does not run the browser tests.
 - `skipLibCheck: true` rather than `@types/node`. With `@types/node`, Node globals would type-check in `src`.
 - The browser tests assert behavior only, as the contract in phase 3 says.
+- 2.0.0 may behave a little differently from 1.x. Where matching 1.x exactly and a modern, plain spec and implementation pull apart, 2.0.0 takes the plain one. That is why it is a major version. The decisions below follow from it.
+- `lastRowAlign` is removed in 2.0.0, together with the exported `LastRowAlign` type.
+- `justifyContent` gains `'start'` and `'end'`. `'left'` and `'right'` stay. Grid's `justify-content` takes all four, and `start` and `end` follow the writing direction.
+- `space-evenly` gets the column count of grid's `auto-fill`, the same rule as every other value: `floor((contentWidth + x) / (width + x))`. With a 100px card and the default spacing this is `floor((w - 8) / 108)`, where 1.11.0 gives `floor((w - 24) / 108)`. From 2 columns up, each column count has a 16px band of widths where 2.0.0 shows one column more. At 332 to 347px it shows 3 where 1.11.0 shows 2. With the default spacing the edges get the same space as the gaps between cards. In 1.11.0 they are 8px wider.
+- No grid props such as `gridTemplateColumns` in the public API. `justifyContent` stays, because its values map one to one onto grid.
 
 ## Open questions
 
-- `lastRowAlign: 'right'` is hard to express in CSS Grid. Keep it with some JavaScript, or remove it in 2.0.0. Decide in phase 4.
 - The README Requirements say React 19 works, but the usage example calls `ReactDOM.render`, which React 19 removed. `createRoot` exists only in React 18 and later. Fix the example before phase 5, or leave it for the Astro docs site. Not decided.
 
 ## Working conventions
