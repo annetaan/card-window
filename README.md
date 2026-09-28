@@ -56,6 +56,27 @@ const App: React.FC = () => {
 createRoot(document.getElementById('app')!).render(<App />);
 ```
 
+### Typed data
+
+CardWindow takes the type of `data` from the props.
+An inline card and `getKey` see each item with that type, without annotations.
+
+```tsx
+type Item = { id: string; title: string };
+
+const List: React.FC<{ items: Item[] }> = ({ items }) => (
+  <div style={{ height: 400 }}>
+    <CardWindow data={items} cardRect={{ width: 200, height: 120 }} getKey={(index, data) => data[index].id}>
+      {({ data, index, style }) => <div style={style}>{data[index].title}</div>}
+    </CardWindow>
+  </div>
+);
+```
+
+A card typed as `CardProps<T>` has to accept `data`.
+A card typed as `CardProps<Item[]>` with `data={range(3)}` is a type error.
+A card typed with the default `CardProps` accepts any `data`.
+
 ## Upgrading from 1.x
 
 2.0.0 lays the cards out with CSS Grid, and the browser works out the number of columns. This list is what you may have to change.
