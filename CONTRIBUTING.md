@@ -88,4 +88,4 @@ Releases are published from GitHub Actions with npm Trusted Publishing.
 
 1. Bump `version` in `packages/main/package.json` and merge it into `main`.
 2. Push a tag that matches the version, for example `git tag v1.10.3 && git push origin v1.10.3`.
-3. `.github/workflows/release.yml` runs the tests, publishes, waits for the registry and runs the smoke test against the new version.
+3. `.github/workflows/release.yml` runs the whole of `ci.yml` on the tagged commit, publishes only if it passes, waits for the registry and runs the smoke test against the new version.

@@ -494,6 +494,13 @@ Decided for phase 5 on 2026-09-28.
 - The four Docusaurus URLs redirect through Astro `redirects`.
 - The "Learn more" link loses the sentence about 1.x. This replaces the 2.0.0 decision that kept it.
 
+Decided after phase 5 on 2026-09-29.
+
+- `release.yml` calls `ci.yml` through `workflow_call` and publishes only after it passes on the tagged commit. The browser tests, arethetypeswrong and the smoke test on the packed tarball now run before every publish, on React 18 and 19. Until 2.0.0, `release.yml` ran only `pnpm test`, and the push run on `main` was the only run that covered the rest. This replaces the phase 3 decision that `release.yml` does not run the browser tests.
+- A separate `check-tag` job compares the tag with `version` first, so a wrong tag fails in seconds instead of after the CI run.
+- `publish` no longer runs `pnpm test`. `npm publish` still builds through `prepack`.
+- The workflows stay on `ubuntu-latest`, which moves to Ubuntu 26 from 2026-10-19. Draft #81 ran `ci.yml` and `docs.yml` on `ubuntu-26.04`, image version 20260920.143.1, in runs 36460228995 and 36460228890. Both legs passed 93 unit tests and 41 browser tests, and the docs build passed. There were no annotations. #81 was closed without a merge.
+
 ## Open questions
 
 - Each layout in the scroll scenarios costs 1.4 to 1.8 times what it did in 1.11.0, for the same 185 layouts. Not traced.
