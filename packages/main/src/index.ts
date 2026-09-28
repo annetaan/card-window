@@ -8,7 +8,6 @@ export type {
   CardProps,
   Rect,
   JustifyContent,
-  LastRowAlign,
   ScrollDirection,
   OnScrollProps,
   Loading,

@@ -90,11 +90,6 @@ describe('columns', () => {
     await expect.poll(() => columnCount(scroller)).toBe(expected);
   });
 
-  test('stops at maxCols', async () => {
-    const { scroller } = await renderCardWindow(820, 300, { data: range(100), maxCols: 4 });
-    await expect.poll(() => columnCount(scroller)).toBe(4);
-  });
-
   test('follows a change in width', async () => {
     const { frame, scroller } = await renderCardWindow(400, 300, { data: range(100) });
     await expect.poll(() => columnCount(scroller)).toBe(3);
@@ -290,4 +285,109 @@ describe('classic scrollbar', () => {
       expect(errors).toEqual([]);
     }),
   );
+});
+
+describe('justifyContent start and end', () => {
+  // The same 8 cards in 3 columns as the last row tests above.
+  test.each(['start', 'end'] as const)(
+    'lines up the last row with the columns above when justifyContent is %s',
+    async (justifyContent) => {
+      const { scroller } = await renderCardWindow(400, 400, { data: range(8), justifyContent });
+      await expect.poll(() => cards(scroller).length).toBe(8);
+      expect(columnCount(scroller)).toBe(3);
+      const all = cards(scroller);
+      for (const i of [6, 7]) {
+        expect(all[i].rect.left).toBeCloseTo(all[i - 3].rect.left, 0);
+        expect(all[i].rect.width).toBeCloseTo(all[i - 3].rect.width, 0);
+        expect(all[i].rect.top).toBeGreaterThan(all[i - 3].rect.top);
+      }
+    },
+  );
+
+  // The content box starts 8px inside the scroller and ends 8px before its
+  // client width. Card 2 is the last column of the top row.
+  test.each([
+    ['left', 'left'],
+    ['start', 'left'],
+    ['right', 'right'],
+    ['end', 'right'],
+  ] as const)("%s puts the columns against the content's %s edge", async (justifyContent, edge) => {
+    const { scroller } = await renderCardWindow(400, 400, { data: range(8), justifyContent });
+    await expect.poll(() => cards(scroller).length).toBe(8);
+    const view = scroller.getBoundingClientRect();
+    const all = cards(scroller);
+    if (edge === 'left') {
+      expect(Math.abs(all[0].rect.left - (view.left + 8))).toBeLessThan(1);
+    } else {
+      expect(Math.abs(all[2].rect.right - (view.left + scroller.clientWidth - 8))).toBeLessThan(1);
+    }
+  });
+});
+
+describe('space-evenly column count', () => {
+  // The content is 324px, and auto-fill fits floor((324 + 8) / 108) = 3 columns.
+  // 1.11.0 kept a gap on both outer sides and fit only 2.
+  test('340px wide fits 3 columns, as grid auto-fill does', async () => {
+    const { scroller } = await renderCardWindow(340, 300, { data: range(100) });
+    await expect.poll(() => columnCount(scroller)).toBe(3);
+  });
+});
+
+describe('container style', () => {
+  // A 300px sizer leaves 284px of content, 2 columns. A 520px one leaves 504px, 4 columns.
+  test('follows a container.style that narrows the sizer', async () => {
+    const { scroller } = await renderCardWindow(600, 300, {
+      data: range(100),
+      container: { style: { maxWidth: 300 } },
+    });
+    await expect.poll(() => columnCount(scroller)).toBe(2);
+  });
+
+  test('follows a container.style change after mount', async () => {
+    const app = (maxWidth: number) => (
+      <div data-testid="frame" style={{ width: 600, height: 300 }}>
+        <CardWindow cardRect={cardRect} data={range(100)} container={{ style: { maxWidth } }}>
+          {Card}
+        </CardWindow>
+      </div>
+    );
+    const screen = await render(app(300));
+    const frame = screen.container.querySelector('[data-testid="frame"]') as HTMLElement;
+    const scroller = frame.firstElementChild as HTMLElement;
+    await expect.poll(() => columnCount(scroller)).toBe(2);
+    await screen.rerender(app(520));
+    await expect.poll(() => columnCount(scroller)).toBe(4);
+  });
+});
+
+describe('resize without loop errors', () => {
+  // A visible 15px classic scrollbar, as in the classic scrollbar tests. At
+  // 600px the content is 600 - 15 - 16 = 569px, which fits 5 columns.
+  test('changing the width 20 times fires no window error', async () => {
+    const style = document.createElement('style');
+    style.textContent = '.classic-scrollbar::-webkit-scrollbar { width: 15px; }';
+    document.head.appendChild(style);
+    const errors: string[] = [];
+    const onError = (e: ErrorEvent) => errors.push(e.message);
+    window.addEventListener('error', onError);
+    try {
+      const { frame, scroller } = await renderCardWindow(400, 330, {
+        data: range(300),
+        root: { className: 'classic-scrollbar' },
+      });
+      await expect.poll(() => columnCount(scroller)).toBe(3);
+      scroller.scrollTop = 1108;
+      await nextFrames();
+      for (let width = 410; width <= 600; width += 10) {
+        frame.style.width = `${width}px`;
+        await nextFrames();
+      }
+      await expect.poll(() => columnCount(scroller)).toBe(5);
+      await nextFrames();
+      expect(errors).toEqual([]);
+    } finally {
+      window.removeEventListener('error', onError);
+      style.remove();
+    }
+  });
 });

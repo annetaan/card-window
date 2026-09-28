@@ -5,7 +5,6 @@ import DefaultCardWindow, {
   CardWindow,
   CardWindowProps,
   JustifyContent,
-  LastRowAlign,
   Loading,
   OnScrollProps,
   Spacing,
@@ -18,7 +17,6 @@ const Card = ({ data, index, style }: CardProps<Item[]>) => <div style={style}>{
 
 const spacing: Spacing = { x: 16 };
 const justifyContent: JustifyContent = 'space-between';
-const lastRowAlign: LastRowAlign = 'left';
 const loading: Loading = { type: 'row', height: 40, LoadingComponent: ({ style }) => <div style={style} /> };
 const onScroll = ({ direction, indexesOfVisible }: OnScrollProps) => [direction, indexesOfVisible.length];
 
@@ -29,7 +27,6 @@ const props: CardWindowProps<Item[]> = {
   getKey: (index, data) => data[index].id,
   spacing,
   justifyContent,
-  lastRowAlign,
   loading,
   onScroll,
 };

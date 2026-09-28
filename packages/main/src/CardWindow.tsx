@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { CSSProperties, Fragment, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
+import { CSSProperties, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 /** CardWindow provides the `CardWindow.children` component with this props. */
@@ -8,7 +8,10 @@ export type CardProps<T extends any[] = any[]> = {
   data: T;
   /** `index` is the index of the data allocated to the `CardWindow.children` component. */
   index: number;
-  /** `style` should be passed to the root of the `CardWindow.children` component. */
+  /**
+   * `style` should be passed to the root of the `CardWindow.children` component.
+   * The grid cell sizes the card, so it is empty today, but pass it anyway.
+   */
   style: CSSProperties;
   /** `row` is the rendered row. */
   row: number;
@@ -23,30 +26,30 @@ export type Rect = { width: number; height: number };
 export type Spacing = { x: number; y: number; top: number; bottom: number; left: number; right: number };
 
 /**
- * JustifyContent only supports 7 values.
- * If the value is `stretch`, the `CardProps.style` has `{ flexBasis: 'auto' }`.
+ * The value goes straight to CSS Grid `justify-content`.
+ * `start` and `end` follow the writing direction, while `left` and `right` do not.
+ * `stretch` grows the columns to fill the row.
  */
 export type JustifyContent =
   | 'left'
   | 'right'
+  | 'start'
+  | 'end'
   | 'center'
   | 'space-around'
   | 'space-between'
   | 'space-evenly'
   | 'stretch';
 
-/**
- * `LastRowAlign` that defines how to align
- * when the number of cards in the last row is less than the number of columns.
- */
-export type LastRowAlign = 'left' | 'right' | 'inherit';
-
 /** There are two rendering types for the infinite loading feature. */
 export type Loading = LoadingCard | LoadingRow;
 
 /** CardWindow provides `LoadingCard.Component` with this props. */
 export type LoadingCardComponentProps = {
-  /** `style` should be passed to the root of `LoadingCard.Component`. */
+  /**
+   * `style` should be passed to the root of `LoadingCard.Component`.
+   * The grid cell sizes the card, so it is empty today, but pass it anyway.
+   */
   style: CSSProperties;
   /** `row` is the rendered row. */
   row: number;
@@ -138,9 +141,6 @@ export type CardWindowProps<T extends any[] = any[]> = {
   /** These values are `px`. The defaults are 8px. */
   spacing?: Partial<Spacing>;
 
-  /** Maximum number of columns can be set. */
-  maxCols?: number;
-
   root?: {
     /** `root.className` are passed to the root element of `CardWindow`. */
     className?: string;
@@ -156,16 +156,11 @@ export type CardWindowProps<T extends any[] = any[]> = {
   };
 
   /**
-   * JustifyContent only supports 7 values.
-   * If the value is `stretch`, the `CardProps.style` has `{ flexBasis: 'auto' }`.
+   * The value goes straight to CSS Grid `justify-content`. The default is `space-evenly`.
+   * `start` and `end` follow the writing direction, while `left` and `right` do not.
+   * `stretch` grows the columns to fill the row.
    */
   justifyContent?: JustifyContent;
-
-  /**
-   * `LastRowAlign` that defines how to align
-   * when the number of cards in the last row is less than the number of columns.
-   */
-  lastRowAlign?: LastRowAlign;
 
   /** `loading?` is a property for the infinite loading feature. */
   loading?: Loading;
@@ -186,24 +181,6 @@ export const range = (_start: number, _end?: number): number[] => {
   const list: number[] = [];
   for (let i = start; i < end; i += 1) list.push(i);
   return list;
-};
-
-const getColumns = (
-  containerWidth: number,
-  cardWidth: number,
-  spacing: Spacing,
-  justifyContent: JustifyContent,
-  maxCols: number | undefined,
-): number => {
-  const { x, left, right } = spacing;
-  const baseWidth = containerWidth - left - right;
-  if (baseWidth < cardWidth) return 0;
-  if (justifyContent === 'space-evenly') {
-    const cols = Math.max(1, Math.floor((baseWidth - x) / (cardWidth + x)));
-    return maxCols !== undefined ? Math.min(maxCols, cols) : cols;
-  }
-  const cols = Math.floor((baseWidth + x) / (cardWidth + x));
-  return maxCols !== undefined ? Math.min(maxCols, cols) : cols;
 };
 
 const defaultLoadingCardCount = 10;
@@ -256,95 +233,10 @@ const getRowRange = (
   return [first, last];
 };
 
-const getRenderContainerStyle = (
-  row: number,
-  card: Rect,
-  spacing: Spacing,
-  justifyContent: JustifyContent,
-): CSSProperties => {
-  const top = row * (card.height + spacing.y) + spacing.top;
-  return {
-    display: 'flex',
-    flexWrap: 'wrap',
-    justifyContent,
-    transform: `translate(0, ${top}px)`,
-  };
-};
-
-const getBaseItemProps = (
-  index: number,
-  cols: number,
-  justifyContent: JustifyContent,
-  { width, height }: Rect,
-  { x }: Spacing,
-): Omit<CardProps, 'data' | 'index'> => {
-  const row = Math.floor(index / cols);
-  const col = index % cols;
-  const marginLeft = col !== 0 && ['center', 'left', 'right', 'stretch'].includes(justifyContent) ? x : undefined;
-  const flexGrow = justifyContent === 'stretch' ? 1 : undefined;
-  const style = { width, flexGrow, height, marginLeft };
-  return { row, col, style };
-};
-
-type CardTypeProps = { type: 'card' } & Omit<CardProps, 'data'>;
-type PlaceholderTypeProps = { type: 'placeholder' } & Omit<CardProps, 'data' | 'index'>;
-type LoadingTypeProps = { type: 'loading' } & Omit<CardProps, 'data' | 'index'>;
-type ItemProps = CardTypeProps | PlaceholderTypeProps | LoadingTypeProps;
-export type ItemType = ItemProps['type'];
-
-const getStop = (
-  rows: [number, number],
-  cols: number,
-  lastRowAlign: LastRowAlign,
-  length: number,
-  loadingCards: number,
-): number => {
-  if (lastRowAlign !== 'inherit') return (rows[1] + 1) * cols;
-  return Math.min(length + loadingCards, (rows[1] + 1) * cols);
-};
-
-const getItemTypeAndIndex = (
-  index: number,
-  col: number,
-  length: number,
-  loadingCards: number,
-  lastRowAlign: LastRowAlign,
-  isLastRow: boolean,
-  stop: number,
-): { type: ItemType; index?: number } => {
-  if (lastRowAlign !== 'right') {
-    if (index < length) return { type: 'card', index };
-    if (index < length + loadingCards) return { type: 'loading' };
-    return { type: 'placeholder' };
-  }
-  // lastRowAlign === 'right'
-  if (!isLastRow) return index < length ? { type: 'card', index } : { type: 'loading' };
-
-  const placeholderCount = stop - length - loadingCards;
-  if (col < placeholderCount) return { type: 'placeholder' };
-  return index - placeholderCount < length ? { type: 'card', index: index - placeholderCount } : { type: 'loading' };
-};
-
-const getItemProps = (
-  length: number,
-  loadingCards: number,
-  cols: number,
-  rows: [number, number],
-  card: Rect,
-  spacing: Spacing,
-  justifyContent: JustifyContent,
-  lastRowAlign: LastRowAlign,
-): ItemProps[] => {
-  if (cols === 0) return [];
-  if (length + loadingCards === 0) return [];
-  const start = rows[0] * cols;
-  const stop = getStop(rows, cols, lastRowAlign, length, loadingCards);
-  return range(start, stop).map((i) => {
-    const base = getBaseItemProps(i, cols, justifyContent, card, spacing);
-    const isLastRow = getLastRowFromLength(length, loadingCards, cols) === base.row;
-    const { type, index } = getItemTypeAndIndex(i, base.col, length, loadingCards, lastRowAlign, isLastRow, stop);
-    return { type, index, ...base };
-  });
+/** The card indexes `[start, stop)` of the rows `rows`, with `count` cards and loading cards in all. */
+const getIndexRange = (rows: [number, number], cols: number, count: number): [number, number] => {
+  if (cols === 0 || rows[1] < rows[0]) return [0, 0];
+  return [rows[0] * cols, Math.min((rows[1] + 1) * cols, count)];
 };
 
 const getNextOffset = (offset: number, before: number, after: number, card: Rect, spacing: Spacing): number => {
@@ -355,15 +247,39 @@ const getNextOffset = (offset: number, before: number, after: number, card: Rect
 };
 
 export const functions = {
-  getColumns,
   getScrollContainerHeight,
   getLastRowFromLength,
   getRowRange,
-  getRenderContainerStyle,
-  getBaseItemProps,
-  getItemProps,
+  getIndexRange,
   getNextOffset,
 };
+
+/** The style every card and loading card receives. The grid cell sizes the card. It is only read. */
+const cardStyle: CSSProperties = {};
+
+/**
+ * The number of column tracks the grid resolved. It is 0 while the tracks are unresolved,
+ * as under `display: none` or in jsdom, where the value still reads `repeat(…)`.
+ */
+const readColumnCount = (grid: HTMLElement | null): number => {
+  if (!grid) return 0;
+  const value = getComputedStyle(grid).gridTemplateColumns.trim();
+  if (value === '' || value === 'none' || value.includes('(')) return 0;
+  return value.split(/\s+/).length;
+};
+
+type ItemProps = {
+  Children: React.ComponentType<CardProps>;
+  data: any[];
+  index: number;
+  row: number;
+  col: number;
+};
+
+// Memoized, so a card whose index, row and col stay the same does not render again when the row range moves.
+const Item = React.memo(({ Children, data, index, row, col }: ItemProps) => (
+  <Children data={data} index={index} style={cardStyle} row={row} col={col} />
+));
 
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
@@ -392,11 +308,9 @@ const CardWindow = React.forwardRef<HTMLDivElement, CardWindowProps>((props, par
     getKey = (index) => index,
     overScanPx = 200,
     spacing: spacingProp,
-    maxCols = undefined,
     root = {},
     container = {},
     justifyContent: justify = 'space-evenly',
-    lastRowAlign = 'left',
     loading,
     thresholdOfVisible = 0.5,
     onScroll,
@@ -406,11 +320,11 @@ const CardWindow = React.forwardRef<HTMLDivElement, CardWindowProps>((props, par
   const spacing = { ...defaultSpacing, ...spacingProp };
   const scrollerRef = useRef<HTMLDivElement>(null);
   useImperativeHandle(parentRef, () => scrollerRef.current as HTMLDivElement, []);
-  const [size, setSize] = useState<Rect | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [measure, setMeasure] = useState<{ viewHeight: number; cols: number } | null>(null);
   const [offset, setOffset] = useState(0);
-  const width = size?.width ?? 0;
-  const viewHeight = size?.height ?? 0;
-  const cols = getColumns(width, card.width, spacing, justify, maxCols);
+  const cols = measure?.cols ?? 0;
+  const viewHeight = measure?.viewHeight ?? 0;
   const loadingCards = getLoadingCardCount(loading);
   const rowCount = cols === 0 || length + loadingCards === 0 ? 0 : getLastRowFromLength(length, loadingCards, cols) + 1;
   const scrollContainerHeight = getScrollContainerHeight(cols, length + loadingCards, card, spacing, loading);
@@ -429,20 +343,36 @@ const CardWindow = React.forwardRef<HTMLDivElement, CardWindowProps>((props, par
     width: '100%',
     paddingLeft: spacing.left,
     paddingRight: spacing.right,
+    boxSizing: 'border-box',
     height: scrollContainerHeight,
   };
   const rows = getRowRange(offset, viewHeight, overScanPx, rowCount, card, spacing);
-  const items = getItemProps(length, loadingCards, cols, rows, card, spacing, justify, lastRowAlign);
-  const renderContainerStyle = getRenderContainerStyle(rows[0], card, spacing, justify);
+  const [start, stop] = getIndexRange(rows, cols, length + loadingCards);
+  const windowStyle: CSSProperties = {
+    transform: `translateY(${spacing.top + rows[0] * (card.height + spacing.y)}px)`,
+  };
+  // The browser decides the column count. CardWindow reads it back from the resolved tracks.
+  const gridStyle: CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns:
+      justify === 'stretch' ? `repeat(auto-fill, minmax(${card.width}px, 1fr))` : `repeat(auto-fill, ${card.width}px)`,
+    gridAutoRows: `${card.height}px`,
+    columnGap: spacing.x,
+    rowGap: spacing.y,
+    justifyContent: justify,
+  };
 
   // The first observation arrives before the first paint, and flushSync renders the cards before that paint too.
   useIsomorphicLayoutEffect(() => {
     const el = scrollerRef.current;
     if (!el) return undefined;
     const observer = new ResizeObserver((entries) => {
-      const { width, height } = entries[0].contentRect;
+      const viewHeight = entries[0].contentRect.height;
+      const cols = readColumnCount(gridRef.current);
       flushSync(() =>
-        setSize((prev) => (prev && prev.width === width && prev.height === height ? prev : { width, height })),
+        setMeasure((prev) =>
+          prev && prev.viewHeight === viewHeight && prev.cols === cols ? prev : { viewHeight, cols },
+        ),
       );
     });
     observer.observe(el);
@@ -480,6 +410,13 @@ const CardWindow = React.forwardRef<HTMLDivElement, CardWindowProps>((props, par
       thresholdOfVisible,
       onScroll,
     };
+    // Only the scroll container is observed, so a sizer narrowed by CardWindow's own props shows up here,
+    // after the commit that narrowed it. Observing the sizer would risk a ResizeObserver loop.
+    const nextCols = readColumnCount(gridRef.current);
+    if (measure && nextCols !== measure.cols) {
+      setMeasure({ ...measure, cols: nextCols });
+      return;
+    }
     // The offset state only changes with the row range, so it can lag scrollTop by less than a row.
     // After a resize or a data change, derive the range from the real scrollTop again.
     const el = scrollerRef.current;
@@ -532,27 +469,38 @@ const CardWindow = React.forwardRef<HTMLDivElement, CardWindowProps>((props, par
   }, []);
 
   useEffect(() => {
-    if (scrollContainerHeight !== 0 && loading?.loadMore) {
-      const lastItem = items.find((item) => item.type === 'card' && item.index === length - 1);
-      if (lastItem) loading.loadMore();
+    if (scrollContainerHeight !== 0 && loading?.loadMore && start <= length - 1 && length - 1 < stop) {
+      loading.loadMore();
     }
-  }, [scrollContainerHeight, loading?.loadMore, items]);
+  }, [scrollContainerHeight, loading?.loadMore, start, stop, length]);
 
   return (
     <div ref={scrollerRef} className={root.className} style={rootStyle}>
       <div className={container.className} style={scrollContainerStyle}>
-        <div style={renderContainerStyle}>
-          {items.map((item, i) => {
-            const key = item.type === 'card' ? getKey(item.index, data) : `row:${item.row},col:${item.col}`;
-            return (
-              <Fragment key={key}>
-                {i !== 0 && item.col === 0 && <div style={{ width: '100%', height: spacing.y }} />}
-                {item.type === 'card' && <Children data={data} {...item} />}
-                {item.type === 'placeholder' && <div style={item.style} />}
-                {item.type === 'loading' && loading?.type === 'card' && <loading.LoadingComponent {...item} />}
-              </Fragment>
-            );
-          })}
+        <div style={windowStyle}>
+          <div ref={gridRef} style={gridStyle}>
+            {range(start, stop).map((i) =>
+              i < length ? (
+                <Item
+                  key={getKey(i, data)}
+                  Children={Children}
+                  data={data}
+                  index={i}
+                  row={Math.floor(i / cols)}
+                  col={i % cols}
+                />
+              ) : (
+                loading?.type === 'card' && (
+                  <loading.LoadingComponent
+                    key={`loading:${i - length}`}
+                    style={cardStyle}
+                    row={Math.floor(i / cols)}
+                    col={i % cols}
+                  />
+                )
+              ),
+            )}
+          </div>
           {loading?.type === 'row' && (
             <div style={{ width: '100%', paddingTop: spacing.y, display: 'flex', justifyContent: 'center' }}>
               <loading.LoadingComponent style={{ height: loading.height }} />
