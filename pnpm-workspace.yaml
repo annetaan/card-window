@@ -2,5 +2,7 @@ packages:
   - packages/main
   - packages/website
 # pnpm 12 fails the install on a build script that is neither allowed nor denied; astro works without esbuild's.
+# lefthook's postinstall runs `lefthook install`, and skips it when CI is set.
 allowBuilds:
   esbuild: false
+  lefthook: true

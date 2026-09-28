@@ -18,5 +18,8 @@
     "test:browser": "pnpm --filter @annetaan/card-window test:browser",
     "typecheck": "pnpm --filter @annetaan/card-window typecheck",
     "watch": "pnpm --filter @annetaan/card-window watch"
+  },
+  "devDependencies": {
+    "lefthook": "^2.1.14"
   }
 }

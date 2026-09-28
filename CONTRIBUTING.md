@@ -21,6 +21,11 @@ Each `docs:` script also generates the API reference from `packages/main/src` wi
 It does not regenerate while `docs:dev` runs, so restart the dev server to see changes to doc comments.
 To work on card-window and the site together, run `pnpm watch` alongside `pnpm docs:dev`.
 
+`pnpm install` also sets up a pre-commit hook with lefthook, from `lefthook.yml`.
+The hook formats the staged files with oxfmt, stages the result and lints the staged JS and TS files with oxlint.
+It does not type-check or run the tests. CI does.
+To skip it for one commit, run `git commit --no-verify`.
+
 Install Chromium once before the first `pnpm test:browser` or `pnpm bench`.
 Run `pnpm --filter @annetaan/card-window exec playwright install --only-shell chromium`.
 To watch the tests in a window, pass `--browser.headless=false`.
