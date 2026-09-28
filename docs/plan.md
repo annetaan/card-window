@@ -513,6 +513,7 @@ Decided for the generic CardWindow on 2026-09-29.
 - The type tests live in `src/CardWindow.test-d.tsx`. `pnpm typecheck` checks them on the React 18 and 19 legs, and Vitest does not collect them. Positive cases assert with `expectTypeOf`, because `tsconfig.json` does not set `noImplicitAny`.
 - `smoke/types.tsx` checks the inference with `@ts-expect-error` under `strict`, against the packed tarball. A manual `npm test` in `smoke` against registry `latest` fails until 2.1.0 is published. `use:local` is the way to test an unpublished build.
 - `ItemProps.Children` is `React.ComponentType<CardProps<any>>`. Passing a `CardProps<T>` card to `Item` still type-checks under `strictFunctionTypes`, which `strict` turns on and TypeScript 6 makes the default.
+- The 2.1.0 release PR bumps `version` in `packages/main/package.json` and adds "Typed data" under Usage in both READMEs. Its example type-checks under `strict`. The GitHub Release body comes from the "What changes for consumers" section of #84.
 
 ## Open questions
 
