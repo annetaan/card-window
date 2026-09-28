@@ -18,7 +18,7 @@ Phases run in this order. Phase 4 changes the API, so the docs wait for it.
 | 1 | Ownership transfer | Done |
 | 2 | Tooling and CI | Done |
 | 3 | Browser tests before the rewrite | Done |
-| 4 | Performance rewrite, released as 2.0.0 | Done |
+| 4 | Performance rewrite, released as 2.0.0 | Done. 2.0.0 not yet published |
 | 5 | Astro docs site | Not started |
 
 ## Phase 1. Ownership transfer (done)
@@ -62,9 +62,9 @@ The rule for this phase is to leave the library source alone. The package that c
 - `.github/workflows/ci.yml` runs on pull requests and pushes to `main`, on Node 24 with pnpm from `pnpm/action-setup@v6.1.0`. It runs oxlint, the oxfmt check, typecheck, test, build, arethetypeswrong and the smoke test against the packed tarball. It replaced `main.yml`, which failed on every PR: first on the retired cache service behind `actions/setup-node@v2`, and after step 1 because its `cache: yarn` ran `yarn cache dir`, which rejects `packageManager: pnpm@12.6.0`. The whole job runs as a matrix on React 18 and 19, shown as `ci (18)` and `ci (19)`, with `fail-fast: false`. The 18 leg uses the lockfile. The 19 leg switches to the latest React 19 right after the frozen install, so every later step runs on it.
 - `.github/workflows/release.yml` installs and tests with pnpm through `pnpm/action-setup@v6.1.0`. The moving `v6` tag predates pnpm 12 support. It still publishes with `npm publish` in `packages/main`. The `v1.11.0` tag proved it end to end in run 36319590312. `publish` ran 162 tests and published with Trusted Publishing and provenance. `smoke` passed against the published 1.11.0. The registry took about 3 minutes to serve the new version. The wait allows about 5, with 30 tries 10 seconds apart. The run warned that `actions/checkout@v4` and `actions/setup-node@v4` target Node 20, which GitHub deprecated. `release.yml` now uses v7 of both, and its checkout sets `persist-credentials: false`, as in `ci.yml`. No tag has run it on v7 yet, so the next release tag verifies it. That run should show neither the Node 20 warning nor npm's `Unknown user config "always-auth"` warning. setup-node v7 no longer exports a placeholder `NODE_AUTH_TOKEN`, so `pnpm install` warns `Failed to replace env in config: ${NODE_AUTH_TOKEN}`. The warning is expected. A local run of pnpm 12.6.0 with the same `.npmrc` printed it and still installed and passed the tests. Before it publishes, npm exchanges the GitHub OIDC token for a publish token and uses it in place of the token from `.npmrc`, without writing the file.
 - `.vscode/settings.json` was deleted in step 5. The repository has no editor settings.
-- Dev React is 18.3.1, a devDependency of `packages/main`, with `@types/react` 18.3.31 and `@types/react-dom` 18.3.7. `@testing-library/react` is 16.3.3 with `@testing-library/dom` 10.4.2, and it supports React 18 and 19. The peer range is `>=16.13.0 <20`. React 16.13 and 17 are inside it, but nothing tests them. `@testing-library/react` 16 cannot run on React 17. The smoke test uses React 18 unless React 19 is passed to `use:local`.
-- `version` in `packages/main/package.json` is 1.11.0, and 1.11.0 is npm `latest`. Its peer range is `>=16.13.0 <20`.
-- `README.md` and `packages/main/README.md` have a Requirements section. Both describe 1.11.0, which is on npm.
+- Dev React is 18.3.1, a devDependency of `packages/main`, with `@types/react` 18.3.31 and `@types/react-dom` 18.3.7. `@testing-library/react` is 16.3.3 with `@testing-library/dom` 10.4.2, and it supports React 18 and 19. The peer range is `>=16.13.0 <20`. React 16.13 and 17 are inside it, but nothing tests them. `@testing-library/react` 16 cannot run on React 17. The smoke test uses React 18 unless React 19 is passed to `use:local`. 2.0.0 narrows the peer to `>=18.0.0 <20`. See "Release 2.0.0" in phase 4.
+- `version` in `packages/main/package.json` is 1.11.0, and 1.11.0 is npm `latest`. Its peer range is `>=16.13.0 <20`. The release PR sets `version` to 2.0.0, and npm `latest` stays 1.11.0 until the tag. See "Release 2.0.0" in phase 4.
+- `README.md` and `packages/main/README.md` have a Requirements section. Both describe 1.11.0, which is on npm. From the merge of the release PR they describe 2.0.0. See "Release 2.0.0" in phase 4.
 
 ### Steps
 
@@ -213,20 +213,34 @@ PRs: #74 browser tests.
 
 ### What changes for consumers
 
-The release PR copies this list into the GitHub Release.
+The README's "Upgrading from 1.x", this list and the "What changes for consumers" section of the release PR carry the same items in the same order. The PR section becomes the body of the GitHub Release. Change all three together.
 
-- Removed: `lastRowAlign`, the `LastRowAlign` type, `maxCols` and the `useResizeObserver` export.
+#### Requirements
+
+- React and React DOM 18 or 19. 1.x allowed 16.13 and 17.
+- `IntersectionObserver` and CSS Grid are new requirements. 1.x already needed `ResizeObserver`.
+- The root uses `scrollbar-gutter`, which needs Chrome 94, Firefox 97 or Safari 18.2. The numbers come from MDN's browser-compat-data. An older browser ignores it, and if it shows classic scrollbars the first render can report the ResizeObserver loop error. In the README this line sits in the top-level Requirements section, not under "Upgrading from 1.x". It is here because the release body needs it.
+
+#### Removed
+
+- `lastRowAlign` and the `LastRowAlign` type. The last row lines up as `'left'`, the 1.x default, did. `'right'` and `'inherit'` have no replacement.
+- `maxCols`. To cap the columns, cap the width around `CardWindow`. For N columns it is `spacing.left + spacing.right + N × cardRect.width + (N − 1) × spacing.x`, plus the scrollbar width where scrollbars are classic.
+- The `useResizeObserver` export.
+
+#### Changed
+
+- The `ref` now points at the scroll container element. In 1.x it received a function that returned the element, and the type hid that. `useRef<HTMLDivElement>(null)` type-checks.
 - `justifyContent` gains `start` and `end`.
-- The column count follows grid `auto-fill` for every `justifyContent` value. For `space-evenly` that means one column more in a 16px band of widths per column count. At 332 to 347px it shows 3 columns where 1.11.0 shows 2.
-- The `ref` now points at the scroll container element. In 1.x it received a function that returned the element, and the type hid that.
-- `CardProps.style` and the `style` of a loading card are an empty object. The grid cell sizes the card.
+- The column count follows grid `auto-fill` for every `justifyContent` value. For `space-evenly`, each column count starts `2 × spacing.x` narrower, 16px with the default spacing. With 100px cards, the default spacing and overlay scrollbars, a 332 to 347px frame shows 3 columns where 1.11.0 showed 2.
+- `CardProps.style` and the `style` of a loading card are an empty object. 1.x set `width`, `height`, `marginLeft` and `flexGrow` there. The grid cell sizes the card.
 - `OnScrollProps.updateWasRequested` means that this scroll changed the rendered row range.
 - `indexesOfVisible` counts `spacing.top`.
 - `loadMore` is called when the end comes within `overScanPx`, and again after `data` grows while the end is still that close. It is no longer called on every render.
 - The loading row renders only when the last row is in range.
 - A container narrower than one card shows one column. 1.11.0 showed nothing.
-- The sizer no longer spills 16px past the scroll container.
-- The root reserves a scrollbar gutter. `root.style` can override it. Where the platform shows classic scrollbars, the gutter narrows the content by the scrollbar width, so each column count starts at a frame that much wider.
+- The element that gets `container.className` and `container.style` (the sizer) no longer spills `spacing.left + spacing.right` past the scroll container, 16px by default. It has `box-sizing: border-box` and `position: relative`, and `container.style` cannot override them.
+- The root reserves a scrollbar gutter. Where scrollbars are classic, the gutter narrows the content by the scrollbar width, so each column count starts at a frame that much wider. `root={{ style: { scrollbarGutter: 'auto' } }}` turns it off, and then classic scrollbars can make the first render report the ResizeObserver loop error again.
+- `onScroll` is called at most once per animation frame. 1.x called it on every scroll event. `direction` compares one frame with the previous one.
 - The mount no longer renders every card twice. In 1.11.0, `useResizeObserver` compared against a stale size and rendered again after the mount.
 
 ### Changes from the plan made during the work
@@ -286,9 +300,36 @@ Card renders fell to a tenth in the scroll scenarios, from 7400 to 740. Resize r
 
 - `ci (18)` and `ci (19)` are green on the PR. That covers lint with the hooks rules as errors, the format check, typecheck, the unit and browser tests, the build, arethetypeswrong and the smoke test against the packed tarball.
 
-### Next
+It holds. On #76, run 36391298156 on `eb5ee86` passed `ci (18)` and `ci (19)`, all 22 steps on each leg. That covers lint, the format check, typecheck, `pnpm test` with 93 tests, `pnpm test:browser` with 41 tests, the build, arethetypeswrong and the smoke test against the packed tarball, on React 18 and on React 19. CodeQL passed on the same commit. The first run, 36382828576 on `fedce74`, failed only `space-evenly column count` at a 340px frame on both legs, because headless Chromium on Linux reserves a classic scrollbar gutter. `eb5ee86` fixed it, as "Tests" above describes. After the squash merge, push run 36393395642 on `a823007` passed on `main`.
 
-The 2.0.0 release PR bumps the version, updates the README Requirements, adds the migration notes and settles the `ReactDOM.render` question. Phase 5 follows it.
+### Release 2.0.0
+
+Half done. The release PR does this:
+
+- bumps `version` in `packages/main/package.json` to 2.0.0 (`769e4e2`)
+- narrows the peer range of `react` and `react-dom` to `>=18.0.0 <20`
+- rewrites the Requirements section in both READMEs
+- switches the usage example to `createRoot` from `react-dom/client`, with `type CardProps`
+- notes under the "Learn more" link that annetaan.github.io still describes 1.x
+- adds "Upgrading from 1.x" to both READMEs (`4969ba2`)
+
+I checked this on the branch. `pnpm-lock.yaml` did not change. `lib/` from `pnpm build` is byte-identical to a build of `a823007`. `npm pack` lists 6 files at version 2.0.0. The smoke test passes against the local 2.0.0 tarball.
+
+After the merge, in this order. Every step that pushes a tag or touches npm needs michiharu's go-ahead.
+
+1. Check that CI on the merge commit passed `ci (18)` and `ci (19)`. `release.yml` runs only `pnpm test`, so that CI run is the only one that covers the browser tests.
+2. Push `v2.0.0` on the merge commit.
+3. `release.yml` checks the tag against `version`, runs the unit tests, publishes with provenance through Trusted Publishing, waits for the registry and runs the smoke test against the published 2.0.0.
+4. This is the first tag to run on checkout and setup-node v7. The log should show neither the Node 20 deprecation warning nor `Unknown user config "always-auth"`. `Failed to replace env in config: ${NODE_AUTH_TOKEN}` is expected, for the reason in the `release.yml` bullet under "Where things stand" in phase 2. Check that the package has provenance.
+5. `npm view @annetaan/card-window dist-tags` shows `latest: 2.0.0`. 1.11.0 stays installable as `@annetaan/card-window@1`, and `^1` ranges do not move.
+6. Create the GitHub Release `v2.0.0` by hand. Its body is the "What changes for consumers" section of the PR, with each heading one level up, as for 1.11.0.
+7. Record the release in a follow-up PR, as #72 did for 1.11.0.
+
+If `publish` fails before `npm publish`, nothing reached npm. Fix it on `main`, then delete the tag and push it again, with michiharu's go-ahead. If it fails after `npm publish`, 2.0.0 is taken for good, and the fix ships as 2.0.1.
+
+Phase 5 follows.
+
+PRs: #76 CSS Grid layout and scrolling.
 
 ## Phase 5. Astro docs site
 
@@ -331,7 +372,7 @@ Decided on 2026-09-27.
 - `@testing-library/react` 16, the only line that supports both React 18 and 19.
 - The React matrix covers the whole `ci` job.
 - CI tests the latest React 19.x. The version is not pinned.
-- React 16.13 and 17 stay in the peer range, untested.
+- React 16.13 and 17 stay in the peer range, untested. Replaced for 2.0.0 on 2026-09-28.
 - The peer range was widened to `<20` in the same PR, after `ci (18)` and `ci (19)` passed on the old range.
 - Release notes for 1.11.0: a GitHub Release, created by hand after the publish succeeds, with its body taken from the PR. No CHANGELOG file.
 - The READMEs get a short Requirements section in 1.11.0. The usage examples stay as they are.
@@ -365,9 +406,17 @@ Decided during phase 4 on 2026-09-28.
 - Near the top the window keeps a full span, so the mount and resize render a few more cards. michiharu accepted this.
 - The 2.0.0 version bump and the READMEs go in a separate release PR.
 
+Decided for the 2.0.0 release on 2026-09-28.
+
+- The peer range of `react` and `react-dom` is `>=18.0.0 <20`. It replaces "React 16.13 and 17 stay in the peer range, untested". Only a major version can narrow the range, and CI tests only 18 and 19.
+- The README example uses `createRoot` from `react-dom/client`.
+- The two READMEs stay identical apart from the first line, and both carry "Upgrading from 1.x".
+- The README's "Upgrading from 1.x", phase 4 "What changes for consumers" and the section of the release PR stay in step.
+- Release notes: a GitHub Release, created by hand after the publish, with its body taken from the PR. No CHANGELOG file, as for 1.11.0.
+- The "Learn more" link stays, with a sentence that the site describes 1.x until it is rebuilt.
+
 ## Open questions
 
-- The README Requirements say React 19 works, but the usage example calls `ReactDOM.render`, which React 19 removed. `createRoot` exists only in React 18 and later. Fix the example before phase 5, or leave it for the Astro docs site. Not decided. The 2.0.0 release PR is where it gets settled.
 - Each layout in the scroll scenarios costs 1.4 to 1.8 times what it did in 1.11.0, for the same 185 layouts. Not traced.
 
 ## Working conventions
