@@ -59,11 +59,9 @@ describe('CardWindow types', () => {
 
   test('rejects a card whose CardProps<T> does not match data', () => {
     const Card = ({ data, index }: CardProps<Item[]>) => <div>{data[index].title}</div>;
-    // T comes from data, so TypeScript reports the mismatch on the card.
-    <CardWindow data={range(3)} cardRect={cardRect}>
-      {/* @ts-expect-error data is number[], and Card takes Item[] */}
-      {Card}
-    </CardWindow>;
+    // @ts-expect-error data is number[], and Card takes Item[]
+    // prettier-ignore
+    <CardWindow data={range(3)} cardRect={cardRect}>{Card}</CardWindow>;
   });
 
   test('rejects a property the element type does not have', () => {
