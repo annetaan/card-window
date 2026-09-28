@@ -75,6 +75,11 @@ Pass React 19 to `use:local` as shown, so it goes into the same install as the p
 A second `npm install --no-save` replaces the tarball with `latest` from the registry, and the smoke test then checks the wrong package.
 `npm warn ERESOLVE overriding peer dependency` during that install is expected.
 
+## Docs site
+
+`.github/workflows/docs.yml` builds the site on every pull request, and on a push to `main` it also deploys the site to https://annetaan.github.io/card-window/ through GitHub Pages.
+The repository's Pages source is "GitHub Actions", and the `github-pages` environment accepts deployments from `main` only.
+
 ## Release
 
 Releases are published from GitHub Actions with npm Trusted Publishing.

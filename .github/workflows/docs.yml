@@ -1,0 +1,56 @@
+name: Docs
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      # The moving v6 tag predates pnpm 12 support, which came in v6.1.0.
+      - uses: pnpm/action-setup@v6.1.0
+      - run: pnpm install --frozen-lockfile
+      # The site imports card-window from packages/main/lib.
+      - run: pnpm build
+      - name: Type-check the docs site
+        run: pnpm --filter website check
+      - name: Build the docs site
+        run: pnpm --filter website build
+      # Hidden files are left out by default, so dist/.prerender stays out of the artifact.
+      - uses: actions/upload-pages-artifact@v5
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        with:
+          path: packages/website/dist
+
+  # Deploying needs the repository's Pages source set to "GitHub Actions",
+  # and the github-pages environment accepts deployments from main only.
+  # This job's `if` and that branch policy guard the deploy independently.
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
