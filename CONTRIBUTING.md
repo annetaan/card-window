@@ -17,8 +17,6 @@ Install Chromium once before the first `pnpm test:browser` or `pnpm bench`.
 Run `pnpm --filter @annetaan/card-window exec playwright install --only-shell chromium`.
 To watch the tests in a window, pass `--browser.headless=false`.
 
-`pnpm lint` prints 4 known warnings from the React hooks rules in `CardWindow.tsx`, and they do not fail CI.
-
 `packageManager` in the root `package.json` pins pnpm 12.6.0.
 pnpm 10 cannot switch itself to 12 and fails with `Unknown system error -8`.
 Use pnpm 12, or run `npx -y pnpm@12.6.0`.
