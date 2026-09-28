@@ -515,6 +515,15 @@ Decided for the generic CardWindow on 2026-09-29.
 - `ItemProps.Children` is `React.ComponentType<CardProps<any>>`. Passing a `CardProps<T>` card to `Item` still type-checks under `strictFunctionTypes`, which `strict` turns on and TypeScript 6 makes the default.
 - The 2.1.0 release PR bumps `version` in `packages/main/package.json` and adds "Typed data" under Usage in both READMEs. Its example type-checks under `strict`. The GitHub Release body comes from the "What changes for consumers" section of #84.
 
+Release 2.1.0 happened on 2026-09-29.
+
+- #84 merged as `3e9a81d` and #85 as `7ca067f`. The push run on `7ca067f` passed `ci (18)` and `ci (19)`. michiharu then gave the go-ahead, and the `v2.1.0` tag went onto `7ca067f`.
+- Run 36498127366 of `release.yml` was the first to use the `check-tag` and `ci` jobs from #82. `check-tag` took 4 seconds. `ci / ci (18)` and `ci / ci (19)` ran in parallel and took 75 and 64 seconds, with 93 unit tests and 41 browser tests on each leg. `publish` started after both and took 21 seconds. It published 2.1.0 with provenance through Trusted Publishing. `smoke` passed against the published 2.1.0.
+- `publish` no longer runs `pnpm test`, so `Failed to replace env in config: ${NODE_AUTH_TOKEN}` appeared once instead of 3 times.
+- The registry answered 404 7 times, 10 seconds apart, and served 2.1.0 about 2 minutes after the publish.
+- npm `latest` is 2.1.0. The GitHub Release v2.1.0 was created with michiharu's go-ahead and is marked Latest. Its body is the consumer section of #85 as a list under one opening sentence, since that section has no subheadings.
+- The only annotations were the notices that `ubuntu-latest` moves to Ubuntu 26 from 2026-10-19. #81 already checked the jobs on `ubuntu-26.04`.
+
 ## Open questions
 
 - Each layout in the scroll scenarios costs 1.4 to 1.8 times what it did in 1.11.0, for the same 185 layouts. Not traced.
