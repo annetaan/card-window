@@ -1,6 +1,6 @@
 ---
 title: Examples
-description: Live examples of CardWindow, from the minimal usage to styling, card positions, columns and overscanning.
+description: Live examples of CardWindow, from the minimal usage to styling, card positions, columns, overscanning, scroll events and infinite loading.
 ---
 
 import Example from '../../components/Example.astro';
@@ -18,8 +18,16 @@ import CapColumns from '../../examples/CapColumns';
 import capColumnsSource from '../../examples/CapColumns.tsx?raw';
 import OverScan from '../../examples/OverScan';
 import overScanSource from '../../examples/OverScan.tsx?raw';
+import ScrollEvent from '../../examples/ScrollEvent';
+import scrollEventSource from '../../examples/ScrollEvent.tsx?raw';
+import ScrollRef from '../../examples/ScrollRef';
+import scrollRefSource from '../../examples/ScrollRef.tsx?raw';
+import LoadingCards from '../../examples/LoadingCards';
+import loadingCardsSource from '../../examples/LoadingCards.tsx?raw';
+import LoadingRow from '../../examples/LoadingRow';
+import loadingRowSource from '../../examples/LoadingRow.tsx?raw';
 
-The examples use `SampleCard`, `Toolbar` and `useSelect` from [Example utils](/card-window/example-utils/).
+The examples use `SampleCard`, `LoadingCard`, `Toolbar` and `useSelect` from [Example utils](/card-window/example-utils/).
 
 ## Minimal usage
 
@@ -121,4 +129,52 @@ With a larger `overScanPx`, more rows stay mounted.
 
 <Example code={overScanSource} title="OverScan.tsx">
   <OverScan client:load />
+</Example>
+
+## Scroll event
+
+`onScroll` is called at most once per animation frame after a scroll.
+It receives [`OnScrollProps`](/card-window/api/type-aliases/onscrollprops/): `direction`, `offset`, `updateWasRequested` and `indexesOfVisible`.
+`updateWasRequested` is true when the scroll moved the rendered rows, whether or not code started the scroll.
+`indexesOfVisible` lists the cards in the rows that show more than `thresholdOfVisible` of the card height, 0.5 by default.
+
+<Example code={scrollEventSource} title="ScrollEvent.tsx">
+  <ScrollEvent client:load />
+</Example>
+
+## Scroll container ref
+
+`ref` receives the scroll container element, so `useRef<HTMLDivElement>(null)` fits it.
+`scrollTo`, `scrollTop` and the rest of the element work on it directly.
+
+<Example code={scrollRefSource} title="ScrollRef.tsx">
+  <ScrollRef client:load />
+</Example>
+
+## Infinite loading
+
+You manage the pending state yourself.
+Set `loadMore` only while you can accept a call.
+
+`loadMore` is called when the end of the list comes within `overScanPx` of the view, and again after `data` grows while the end is still that close.
+It is not called on every render.
+
+[`Loading`](/card-window/api/type-aliases/loading/) has two types, `card` and `row`.
+
+### type: `'card'`
+
+The loading cards follow the last card in the grid.
+`count` sets how many, 10 by default.
+
+<Example code={loadingCardsSource} title="LoadingCards.tsx">
+  <LoadingCards client:load />
+</Example>
+
+### type: `'row'`
+
+`height` is required.
+The loading row renders once, centered below the last row, and only when the last row is in range.
+
+<Example code={loadingRowSource} title="LoadingRow.tsx">
+  <LoadingRow client:load />
 </Example>
