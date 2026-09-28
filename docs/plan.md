@@ -19,7 +19,7 @@ Phases run in this order. Phase 4 changes the API, so the docs wait for it.
 | 2 | Tooling and CI | Done |
 | 3 | Browser tests before the rewrite | Done |
 | 4 | Performance rewrite, released as 2.0.0 | Done |
-| 5 | Astro docs site | In progress |
+| 5 | Astro docs site | Done |
 
 ## Phase 1. Ownership transfer (done)
 
@@ -321,11 +321,11 @@ It was the first tag to run on checkout and setup-node v7. The log showed neithe
 
 npm `latest` is 2.0.0, with the peer range `>=18.0.0 <20`. `@annetaan/card-window@1` still installs 1.11.0, so `^1` ranges do not move. The GitHub Release v2.0.0 was created by hand with michiharu's go-ahead. Its body is the "What changes for consumers" section of #77, with each heading one level up. It is marked Latest.
 
-Phase 5 is next.
+Phase 5 followed in #79.
 
 PRs: #76 CSS Grid layout and scrolling, #77 release 2.0.0, #78 release record.
 
-## Phase 5. Astro docs site
+## Phase 5. Astro docs site (done)
 
 - Astro with Starlight. Live examples as React islands.
 - Move `intro.md`, `examples.mdx`, `example-utils.mdx` and the API reference that typedoc generates today.
@@ -351,7 +351,10 @@ PRs: #76 CSS Grid layout and scrolling, #77 release 2.0.0, #78 release record.
 - `64649d8` dropped the typedoc 3 workarounds from the JSDoc.
 - `5790bee` ported the layout examples.
 - `60ba2ca` ported the scroll and loading examples.
-- The last commit added the redirects, removed the 1.x sentence from both READMEs and updated this plan.
+- `a27fb51` added the redirects, removed the 1.x sentence from both READMEs and updated this plan.
+- `8fbc95e` fixed the wording the integration review found in `docs.yml` and in this plan.
+
+PR #79 merged as `a517ca3`.
 
 ### Changes from the plan made during the work
 
@@ -379,17 +382,19 @@ I checked the examples by hand in `astro preview` in headless Chromium. Every is
 
 `pnpm docs:build` writes a redirect page for each of the four Docusaurus URLs: `/docs/intro/`, `/docs/examples/`, `/docs/example-utils/` and `/docs/api/modules/`. These are the four HTML pages under `docs/` on `origin/gh-pages`. In `astro preview` each one lands on its new page, `/docs/api/modules/` on `/api/readme/`.
 
-The CI run IDs on the PR go here later.
+On the PR head `8fbc95e`, CI run 36446718562 passed `ci (18)` and `ci (19)`. Docs run 36446718617 passed `build`. It skipped the upload step and the `deploy` job, as it should on a pull request.
 
 ### After merge
 
-Some steps wait for michiharu's go-ahead. The record PR fills them in.
+michiharu merged #79 before the Pages switch, so the order changed a little.
 
-1. Right before the merge, switch Pages to `build_type: workflow`, with michiharu's go-ahead. The main session does it. It is not a task.
-2. Add a `main`-only deployment branch policy to the `github-pages` environment, with michiharu's go-ahead.
-3. Confirm that the push run of `docs.yml` deployed, that https://annetaan.github.io/card-window/ serves the Starlight site, and that `/card-window/docs/intro/` redirects.
-4. After that, delete `origin/gh-pages`, with michiharu's go-ahead. It holds the Docusaurus build for 1.x from 2022-09-22.
-5. The npm page picks up the README change with the next release.
+1. The push run of `docs.yml` on `a517ca3`, 36457039923, passed `build` and failed `deploy`. `actions/deploy-pages` answered "Invalid deployment branch and no branch protection rules set in the environment. Deployments are only allowed from gh-pages". Pages still served the old `gh-pages` branch. CI run 36457039921 on the same push passed `ci (18)` and `ci (19)`.
+2. With michiharu's go-ahead, I switched Pages to `build_type: workflow` with `gh api -X PUT repos/annetaan/card-window/pages -f build_type=workflow`.
+3. With the same go-ahead, I set the `github-pages` environment to custom branch policies and added one policy, the branch `main`.
+4. I started `docs.yml` by hand on `main`. Run 36457169607 passed `build` and `deploy`. The deployment for `a517ca3` was created at 17:18:52 UTC on 2026-09-28.
+5. https://annetaan.github.io/card-window/ serves the Starlight site. `/`, `/intro/`, `/examples/`, `/example-utils/`, `/api/readme/` and `/api/type-aliases/cardwindowprops/` all answered 200. The four redirect pages point at `/card-window/intro/`, `/card-window/examples/`, `/card-window/example-utils/` and `/card-window/api/readme/`.
+6. With michiharu's go-ahead, I deleted `origin/gh-pages`. It was at `967c8bf` and held the Docusaurus build for 1.x from 2022-09-22. The site still answered 200 after the delete.
+7. The npm page picks up the README change with the next release. Nothing is released for phase 5.
 
 ### Done when
 
