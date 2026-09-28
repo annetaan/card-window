@@ -18,7 +18,7 @@ Phases run in this order. Phase 4 changes the API, so the docs wait for it.
 | 1 | Ownership transfer | Done |
 | 2 | Tooling and CI | Done |
 | 3 | Browser tests before the rewrite | Done |
-| 4 | Performance rewrite, released as 2.0.0 | Not started |
+| 4 | Performance rewrite, released as 2.0.0 | Done |
 | 5 | Astro docs site | Not started |
 
 ## Phase 1. Ownership transfer (done)
@@ -50,7 +50,7 @@ The rule for this phase is to leave the library source alone. The package that c
 - The pnpm 10 that mise installs locally cannot switch itself to 12. mise older than 2026.9.x cannot install pnpm 12 either, because its aqua registry expects the old asset name `pnpm-macos-arm64` and pnpm 12 ships `pnpm-darwin-arm64.tar.gz`. Upgrade mise first (`brew upgrade mise` for a Homebrew install, which cannot run `mise self-update`), then run `mise upgrade pnpm` and open a new shell. `npx -y pnpm@12.6.0` remains the fallback.
 - `packages/main`: tsdown 0.23 (rolldown), TypeScript 5.9.3, Vitest 5 with jsdom 29, oxlint 1.85 with `packages/main/.oxlintrc.json`, oxfmt 0.70 with `.oxfmtrc.json` at the root. tsdown does not type-check. `pnpm typecheck` runs `tsc --noEmit` on `src`, test files included, and CI runs it too.
 - `packages/main/tsconfig.json` sets `target` and the ES part of `lib` to ES2019 to match tsdown's target. They only affect type checking. It uses `moduleResolution: bundler`, `jsx: react` and `isolatedModules`. It sets `noEmit`, so tsdown writes all the output. With `isolatedModules`, a type re-export without `export type` makes `pnpm typecheck` fail with TS1205.
-- `packages/main/.oxlintrc.json` turns on the `typescript`, `react`, `jsx-a11y` and `import` plugins, with the `correctness` category as errors. On top of that it sets `react/function-component-definition` for arrow functions and `sort-imports` with `ignoreDeclarationSort`, both from `.eslintrc.js`. It also sets the rules from @typescript-eslint/recommended v5 that `correctness` misses, such as `no-array-constructor`, `typescript/no-empty-object-type` and `typescript/no-unsafe-function-type`. `react/rules-of-hooks` is an error. `react/exhaustive-deps` and `react/refs` are warnings until phase 4. `reportUnusedDisableDirectives` is an error. `pnpm lint` prints 4 known warnings in `CardWindow.tsx`: `refs` at line 472 and `exhaustive-deps` at lines 420, 515 and 523.
+- `packages/main/.oxlintrc.json` turns on the `typescript`, `react`, `jsx-a11y` and `import` plugins, with the `correctness` category as errors. On top of that it sets `react/function-component-definition` for arrow functions and `sort-imports` with `ignoreDeclarationSort`, both from `.eslintrc.js`. It also sets the rules from @typescript-eslint/recommended v5 that `correctness` misses, such as `no-array-constructor`, `typescript/no-empty-object-type` and `typescript/no-unsafe-function-type`. `react/rules-of-hooks` is an error. `react/exhaustive-deps` and `react/refs` were warnings until phase 4, which made them errors. `reportUnusedDisableDirectives` is an error. `pnpm lint` now reports nothing.
 - `.oxfmtrc.json` at the root sets print width 120, single quotes and `trailingComma: "all"`. Semicolons are oxfmt's default. `sortPackageJson` is off. `sortImports` puts React first. So the import order is checked by `pnpm format:check`, not by lint. oxlint and oxfmt run from `packages/main` with no path arguments and cover every file there that git does not ignore.
 - Nothing in the tooling holds TypeScript at 5.x any more.
 - `packages/main/tsdown.config.mts` sets the build output. It writes four files: `lib/esm/index.mjs`, `lib/esm/index.d.mts`, `lib/cjs/index.js` and `lib/cjs/index.d.ts`. Each format gets one type file. The target is ES2019. The syntax target comes from the tsdown config, not from `tsconfig.json`.
@@ -193,7 +193,7 @@ It holds. On #74, `ci (18)` and `ci (19)` passed in run 36333552544, the `pnpm t
 
 PRs: #74 browser tests.
 
-## Phase 4. Performance rewrite (2.0.0)
+## Phase 4. Performance rewrite (2.0.0) (done)
 
 - Lay cards out with CSS Grid. `grid-template-columns: repeat(auto-fill, <width>)` with `justify-content` keeps the last row left-aligned without any JavaScript. `stretch` maps to `minmax(<width>, 1fr)`. `start` and `end` are new, and they pass through to `justify-content` as `left` and `right` do. `space-evenly` gets the column count `auto-fill` gives, like every other value.
 - Remove `lastRowAlign` and the `LastRowAlign` type.
@@ -201,6 +201,93 @@ PRs: #74 browser tests.
 - Scroll: a passive listener, work batched in `requestAnimationFrame`, and a state update only when the visible row range changes.
 - Resize with `ResizeObserver`. Infinite loading with an `IntersectionObserver` on a sentinel element.
 - Measure before and after. Record the numbers in the PR.
+
+### Where things stand
+
+- The DOM has four levels. The root is the scroll container. It sets `scrollbarGutter: 'stable'` before the `root.style` spread. Inside it is the sizer, with `container.className`, `boxSizing: 'border-box'`, `position: 'relative'` and an explicit height. Inside the sizer is the window, moved down with `translateY`. Inside the window is the grid. Its tracks are `repeat(auto-fill, <width>px)`, or `repeat(auto-fill, minmax(<width>px, 1fr))` for `stretch`, with `gridAutoRows`, the gaps and `justify-content`. The loading row is the grid's next sibling. A 1px sentinel sits absolutely positioned at the bottom of the sizer.
+- The column count is read back from the resolved `grid-template-columns` in `readColumnCount`. There is no column formula in JavaScript. The count is read in two places. One is the callback of the only `ResizeObserver`, which observes the scroll container and updates state through `flushSync`. The other is the layout effect after every commit.
+- Scroll uses a passive listener and one `requestAnimationFrame` per frame. State is set only when the render range changes. `getRenderRange` keys that range on its first row. It spans `ceil((viewHeight + 2 × overScanPx + cardHeight) / pitch)` rows, so it changes only when its first row changes. `getRowRange` still gives the exact rows for `indexesOfVisible`. A `latest` ref is written after each commit, and the range is checked again against the live `scrollTop` after each commit too.
+- Cards render through a module-level `React.memo` item and share one empty `style` object. Loading cards follow them in the grid.
+- `loadMore` is called from an `IntersectionObserver` on the sentinel, with `rootMargin: <overScanPx>px 0px`. The observer is recreated when `data.length` changes.
+- `pnpm bench` runs the benchmark in `packages/main/bench/`. It mounts a 1000×800 frame with 10,000 cards of 200×120, scrolls 600 frames by 40px, does the same with a no-op `onScroll`, and resizes the frame from 1000px to 500px and back in 10px steps. For each scenario it reports CPU time in script, layout and style, the layout and style recalc counts, card renders, DOM nodes, commits and the p95 frame interval. Commits is the number of tasks that changed the DOM during the scenario, counted with a `MutationObserver` on the frame. Chained commits in one task count once.
+
+### What changes for consumers
+
+The release PR copies this list into the GitHub Release.
+
+- Removed: `lastRowAlign`, the `LastRowAlign` type, `maxCols` and the `useResizeObserver` export.
+- `justifyContent` gains `start` and `end`.
+- The column count follows grid `auto-fill` for every `justifyContent` value. For `space-evenly` that means one column more in a 16px band of widths per column count. At 332 to 347px it shows 3 columns where 1.11.0 shows 2.
+- The `ref` now points at the scroll container element. In 1.x it received a function that returned the element, and the type hid that.
+- `CardProps.style` and the `style` of a loading card are an empty object. The grid cell sizes the card.
+- `OnScrollProps.updateWasRequested` means that this scroll changed the rendered row range.
+- `indexesOfVisible` counts `spacing.top`.
+- `loadMore` is called when the end comes within `overScanPx`, and again after `data` grows while the end is still that close. It is no longer called on every render.
+- The loading row renders only when the last row is in range.
+- A container narrower than one card shows one column. 1.11.0 showed nothing.
+- The sizer no longer spills 16px past the scroll container.
+- The root reserves a scrollbar gutter. `root.style` can override it.
+- The mount no longer renders every card twice. In 1.11.0, `useResizeObserver` compared against a stale size and rendered again after the mount.
+
+### Changes from the plan made during the work
+
+- **Literal `auto-fill`, with the count read back.** The first design computed the column count in JavaScript. VirtuosoGrid in react-virtuoso 4.18.15 lets CSS draw the grid but computes the count again in JavaScript from measured sizes. Its issues #1158, #936 and #1023 come from that copy disagreeing with the CSS. card-window already knows the card size and needs only the count, so it reads the count from the browser. `auto-fill` cannot cap the columns, so `maxCols` went. With it went one phase 3 browser test, `columns > stops at maxCols`. That is the only change to the phase 3 tests. The other 18 are unchanged.
+- **`scrollbarGutter: 'stable'`**, michiharu's decision. With a classic scrollbar, the first render inside the `ResizeObserver` callback made the scrollbar appear. That resized the observed box, and Chromium reported "ResizeObserver loop completed with undelivered notifications". A stable gutter keeps the content width fixed.
+- **The column-change effect starts from the offset the scroll handler last recorded**, in `lastScrollTop`. By the time the effect runs, the browser has already clamped the live `scrollTop` to the shorter sizer, and the view jumped back.
+- **The sizer is not observed.** The plan observed it too. A change reported on the sizer, followed by `flushSync`, changes the sizer's own height at the same depth, and that is the loop error again. The read after each commit covers changes to the sizer width. Those only come from CardWindow's props.
+- **The sentinel exists only after the first measurement.** Before it the sizer is 0px tall, so `loadMore` would fire on mount for any list.
+- **`shownRows`.** A `type: 'row'` loading row taller than the reach can leave the render range past the last card row. The window then starts at the last card row, so the loading row stays inside the sizer and `scrollHeight` does not grow.
+- **The render range moves only with its first row.** The first measurement of `ea617c6` showed 336 layouts and style recalcs in the scroll scenarios, where 1.11.0 had 185. A probe counted commits, layouts and scroll events. `ea617c6` made 336 commits and 336 layouts. With the render range keyed on its first row it made 185 and 185. `ea617c6` with the reads and the re-check after each commit skipped still made 336, so those reads were not the cause. All three variants got 600 scroll events. The range from `getRowRange` changed at two offsets per row, once when a row entered at the bottom and once when a row left at the top. So every row cost two commits and two layouts. 1.11.0 re-rendered only when its first row changed. `getRenderRange` now returns `[first, first + span − 1]`, clamped to the last row. The unit sweep and fuzzing checked that this span always covers every row `getRowRange` returns, 4.86M cases in the task and 8M in review. There is a cost. Near the top the window still holds a full span, so the mount renders 44 cards where `ea617c6` rendered 32, and resize renders 122 where it rendered 86. Both stay far below 1.11.0's 64 and 2,400. michiharu accepted this to keep the rule that the range changes only when its first row does.
+- **`useResizeObserver` was removed from the exports**, michiharu's decision.
+- **The 2.0.0 version bump and the README migration notes go in a separate release PR**, as #71 did for 1.11.0.
+
+### Tests
+
+- `pnpm test` reports 2 files and 93 tests passed.
+- `pnpm test:browser` reports 41 tests passed. The phase 3 groups are `columns` with 6, `last row` 7, `scroll offset` 1, `loadMore` 3 and `onScroll` 1. The new groups are `rendering` with 2, `classic scrollbar` 5, `justifyContent start and end` 6, `space-evenly column count` 1, `container style` 2, `resize without loop errors` 1, `loadMore reach` 3, `loading row past the end` 2 and `scroll commits` 1.
+- Of the 162 jsdom tests, 95 were deleted with the code they tested: `getColumns` 25, `getRenderFirstRow` 10, `getRows` 12, `getRenderContainerStyle` 6, `getBaseItemProps` 12 and `getItemProps` 30. 67 are unchanged: `range` 8, `getScrollContainerHeight` 39, `getLastRowFromLength` 15, `getNextOffset` 3, the render test and the index test. 26 were added: `getRowRange` 16, `getRenderRange` 4, `getIndexRange` 5 and the export keys test.
+- The layout is now asserted in the browser suite only.
+
+### Benchmark
+
+I ran `pnpm bench --runs=5` on `9932974` for before and on `e2e564f` for after. `9932974` adds the benchmark to the 1.11.0 source, and `e2e564f` is the last source commit of phase 4. The before tree got `e2e564f`'s `bench/` copied in, so both print the same columns. The two trees alternated for 3 rounds in one session, before first. They ran on Chromium 153.0.8010.12 and Node 24.14.0 at 4x CPU throttle, on an Apple M3 Mac with 16GB of memory.
+
+Counts were the same in all 3 invocations of each tree.
+
+| Scenario | Layouts | Style recalcs | Commits | Card renders | DOM nodes |
+| --- | --: | --: | --: | --: | --: |
+| mount | 2 → 2 | 2 → 2 | 2 → 2 | 64 → 44 | 41 → 47 |
+| scroll | 185 → 185 | 185 → 185 | 185 → 185 | 7400 → 740 | 51 → 47 |
+| scroll-onscroll | 185 → 185 | 185 → 185 | 185 → 185 | 7400 → 740 | 51 → 47 |
+| resize | 104 → 104 | 104 → 104 | 104 → 104 | 2400 → 122 | 41 → 47 |
+
+Durations are the median of the 3 invocation medians, with the min to max range across the 3 in brackets.
+
+| Scenario | | Script ms | Layout ms | Style ms | Task ms | p95 frame ms |
+| --- | --- | --: | --: | --: | --: | --: |
+| mount | before | 12.8 (11.9–13.5) | 9.4 (9.3–9.7) | 0.1 (0.1–0.7) | 26.0 (25.9–27.2) | 11.8 (10.4–11.9) |
+| mount | after | 11.8 (11.4–12.5) | 9.7 (9.6–9.9) | 0.1 (0.1–0.1) | 26.0 (25.1–26.2) | 16.7 (16.7–16.7) |
+| scroll | before | 90.5 (75.9–104.4) | 22.2 (17.8–26.9) | 8.5 (6.0–8.6) | 239.1 (190.2–271.0) | 16.7 (16.7–16.8) |
+| scroll | after | 62.2 (58.3–65.4) | 30.2 (29.8–36.8) | 9.3 (8.0–9.7) | 174.9 (158.6–190.8) | 16.7 (16.7–16.7) |
+| scroll-onscroll | before | 81.7 (66.4–83.4) | 19.5 (19.2–20.6) | 6.9 (5.3–8.6) | 210.9 (179.9–214.8) | 16.7 (16.7–16.8) |
+| scroll-onscroll | after | 63.7 (61.3–121.5) | 35.2 (34.9–51.1) | 10.9 (10.3–20.0) | 188.6 (177.9–368.7) | 16.7 (16.7–16.7) |
+| resize | before | 21.2 (19.5–24.2) | 3.7 (3.6–3.8) | 0.8 (0.7–0.8) | 49.9 (49.0–56.8) | 16.7 (16.7–16.8) |
+| resize | after | 7.5 (7.2–8.0) | 3.6 (3.6–4.3) | 0.5 (0.4–1.0) | 37.4 (33.4–38.2) | 16.7 (16.7–16.8) |
+
+Card renders fell to a tenth in the scroll scenarios, from 7400 to 740. Resize renders 122 cards where 1.11.0 rendered 2400, and the mount 44 where it rendered 64. The mount no longer renders every card twice. The window now holds 47 elements in every scenario, because it always keeps a full span. That is 6 more than 1.11.0 at the top of the list and 4 fewer while scrolling. Layouts and style recalcs in the scroll scenarios are 185, the same as 1.11.0, and there is one commit per row scrolled. The first measurement of `ea617c6` showed 336 here. That was traced and fixed, as the bullet on the render range above describes. Task time fell in the scroll scenarios, from 239.1ms to 174.9ms and from 210.9ms to 188.6ms, and in resize from 49.9ms to 37.4ms. Layout time in the scroll scenarios went up, from 22.2ms to 30.2ms and from 19.5ms to 35.2ms, for the same number of layouts. I do not know why each layout costs more. Apart from one invocation, durations move between invocations by up to 81ms of task time. That one, scroll-onscroll after in round 1, took 368.7ms, twice the other two. That is why the rounds alternated.
+
+### Known limitations
+
+- A `LoadingComponent` or a card that is wider than its box overflows horizontally. CardWindow does not clip it. If that overflow first appears during the render inside the `ResizeObserver` callback, a classic horizontal scrollbar can trigger the loop error.
+- The loop error can also occur when the frame has no set height. That case never virtualized in 1.x either.
+
+### Done when
+
+- `ci (18)` and `ci (19)` are green on the PR. That covers lint with the hooks rules as errors, the format check, typecheck, the unit and browser tests, the build, arethetypeswrong and the smoke test against the packed tarball.
+
+### Next
+
+The 2.0.0 release PR bumps the version, updates the README Requirements, adds the migration notes and settles the `ReactDOM.render` question. Phase 5 follows it.
 
 ## Phase 5. Astro docs site
 
@@ -232,7 +319,7 @@ Decided on 2026-09-27.
 - The `coverage` script stays, on `@vitest/coverage-v8`.
 - The next release is 1.11.0, not 1.10.4, because the syntax floor and the TypeScript floor both rise.
 - Lint base: oxlint's `correctness` with the `typescript`, `react`, `jsx-a11y` and `import` plugins, plus the rules the old config set by name and the @typescript-eslint/recommended v5 rules that `correctness` misses. The airbnb rules are not ported one by one.
-- `react/rules-of-hooks` is an error. `react/exhaustive-deps` and `react/refs` stay warnings until phase 4.
+- `react/rules-of-hooks` is an error. `react/exhaustive-deps` and `react/refs` stay warnings until phase 4. Phase 4 made them errors.
 - Lint and format cover all of `packages/main`.
 - oxfmt uses `trailingComma: "all"`.
 - Import declaration order is enforced by the format check, through `sortImports` in oxfmt.
@@ -263,9 +350,24 @@ Decided on 2026-09-28.
 - `space-evenly` gets the column count of grid's `auto-fill`, the same rule as every other value: `floor((contentWidth + x) / (width + x))`. With a 100px card and the default spacing this is `floor((w - 8) / 108)`, where 1.11.0 gives `floor((w - 24) / 108)`. From 2 columns up, each column count has a 16px band of widths where 2.0.0 shows one column more. At 332 to 347px it shows 3 where 1.11.0 shows 2. With the default spacing the edges get the same space as the gaps between cards. In 1.11.0 they are 8px wider.
 - No grid props such as `gridTemplateColumns` in the public API. `justifyContent` stays, because its values map one to one onto grid.
 
+Decided during phase 4 on 2026-09-28.
+
+- The grid uses literal `auto-fill`, and CardWindow reads the column count back from the resolved tracks.
+- `maxCols` is removed, together with its phase 3 test.
+- `useResizeObserver` is removed from the exports.
+- The root sets `scrollbarGutter: 'stable'`. `root.style` can override it.
+- `ResizeObserver` observes the scroll container only.
+- `loadMore` is called from an `IntersectionObserver` on a sentinel, when the end comes within `overScanPx` and again after `data` grows.
+- The benchmark is committed as `pnpm bench`. Before and after are measured in alternating rounds.
+- `react/exhaustive-deps` and `react/refs` are errors.
+- The render range is keyed on its first row and changes only when that row changes. The exact rows are used only for `indexesOfVisible`.
+- Near the top the window keeps a full span, so the mount and resize render a few more cards. michiharu accepted this.
+- The 2.0.0 version bump and the READMEs go in a separate release PR.
+
 ## Open questions
 
-- The README Requirements say React 19 works, but the usage example calls `ReactDOM.render`, which React 19 removed. `createRoot` exists only in React 18 and later. Fix the example before phase 5, or leave it for the Astro docs site. Not decided.
+- The README Requirements say React 19 works, but the usage example calls `ReactDOM.render`, which React 19 removed. `createRoot` exists only in React 18 and later. Fix the example before phase 5, or leave it for the Astro docs site. Not decided. The 2.0.0 release PR is where it gets settled.
+- Each layout in the scroll scenarios costs 1.4 to 1.8 times what it did in 1.11.0, for the same 185 layouts. Not traced.
 
 ## Working conventions
 
