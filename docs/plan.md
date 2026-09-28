@@ -2,7 +2,7 @@
 
 This is the working plan for bringing card-window up to date. I keep it here so a new session can pick up where the last one stopped. Update the status lines as work lands.
 
-Last updated: 2026-09-28
+Last updated: 2026-09-29
 
 ## Goals
 
@@ -19,7 +19,7 @@ Phases run in this order. Phase 4 changes the API, so the docs wait for it.
 | 2 | Tooling and CI | Done |
 | 3 | Browser tests before the rewrite | Done |
 | 4 | Performance rewrite, released as 2.0.0 | Done |
-| 5 | Astro docs site | Not started |
+| 5 | Astro docs site | In progress |
 
 ## Phase 1. Ownership transfer (done)
 
@@ -44,9 +44,9 @@ The rule for this phase is to leave the library source alone. The package that c
 
 ### Where things stand
 
-- pnpm 12.6.0 workspace, pinned by `packageManager` in the root `package.json`. It holds `packages/main` only.
+- pnpm 12.6.0 workspace, pinned by `packageManager` in the root `package.json`. It holds `packages/main` only. Phase 5 added `packages/website`.
 - `pnpm-lock.yaml` was imported from `yarn.lock` with `pnpm import`, so every version is unchanged.
-- `pnpm-workspace.yaml` has no `allowBuilds` any more. `esbuild` left with esbuild-jest in step 4, and `core-js-pure` left with ESLint in step 5. No package that remains needs a build.
+- `pnpm-workspace.yaml` has no `allowBuilds` any more. `esbuild` left with esbuild-jest in step 4, and `core-js-pure` left with ESLint in step 5. No package that remains needs a build. Phase 5 added `allowBuilds: { esbuild: false }` for astro. See phase 5.
 - The pnpm 10 that mise installs locally cannot switch itself to 12. mise older than 2026.9.x cannot install pnpm 12 either, because its aqua registry expects the old asset name `pnpm-macos-arm64` and pnpm 12 ships `pnpm-darwin-arm64.tar.gz`. Upgrade mise first (`brew upgrade mise` for a Homebrew install, which cannot run `mise self-update`), then run `mise upgrade pnpm` and open a new shell. `npx -y pnpm@12.6.0` remains the fallback.
 - `packages/main`: tsdown 0.23 (rolldown), TypeScript 5.9.3, Vitest 5 with jsdom 29, oxlint 1.85 with `packages/main/.oxlintrc.json`, oxfmt 0.70 with `.oxfmtrc.json` at the root. tsdown does not type-check. `pnpm typecheck` runs `tsc --noEmit` on `src`, test files included, and CI runs it too.
 - `packages/main/tsconfig.json` sets `target` and the ES part of `lib` to ES2019 to match tsdown's target. They only affect type checking. It uses `moduleResolution: bundler`, `jsx: react` and `isolatedModules`. It sets `noEmit`, so tsdown writes all the output. With `isolatedModules`, a type re-export without `export type` makes `pnpm typecheck` fail with TS1205.
@@ -57,7 +57,7 @@ The rule for this phase is to leave the library source alone. The package that c
 - `packages/main/vitest.config.mts` only sets the jsdom environment. `globals` is off, so the tests import `describe`, `test` and `expect` from `vitest`. `test` is `vitest run`. `coverage` is `vitest run --coverage` with `@vitest/coverage-v8`.
 - `main`, `module` and `exports` are the same as in 1.10.3. `types` points at `./lib/cjs/index.d.ts`.
 - tsdown needs Node `^22.18.0 || ^24.11.0 || >=26.0.0`. Vitest 5 asks for `^22.12.0 || ^24.0.0 || >=26.0.0` and jsdom 29 asks for less, so tsdown still sets the Node floor. jsdom 30 would need `^22.22.2 || ^24.15.0 || >=26.0.0`.
-- `packages/website`: Docusaurus 2.0.0-beta.18. It is replaced in phase 5.
+- `packages/website`: Docusaurus 2.0.0-beta.18. It is replaced in phase 5. Phase 5 replaced it with Astro Starlight.
 - `smoke/`: a standalone npm package outside the pnpm workspace. `npm run use:local` clears `smoke/dist`, packs `packages/main` into it and installs the tarball.
 - `.github/workflows/ci.yml` runs on pull requests and pushes to `main`, on Node 24 with pnpm from `pnpm/action-setup@v6.1.0`. It runs oxlint, the oxfmt check, typecheck, test, build, arethetypeswrong and the smoke test against the packed tarball. It replaced `main.yml`, which failed on every PR: first on the retired cache service behind `actions/setup-node@v2`, and after step 1 because its `cache: yarn` ran `yarn cache dir`, which rejects `packageManager: pnpm@12.6.0`. The whole job runs as a matrix on React 18 and 19, shown as `ci (18)` and `ci (19)`, with `fail-fast: false`. The 18 leg uses the lockfile. The 19 leg switches to the latest React 19 right after the frozen install, so every later step runs on it.
 - `.github/workflows/release.yml` installs and tests with pnpm through `pnpm/action-setup@v6.1.0`. The moving `v6` tag predates pnpm 12 support. It still publishes with `npm publish` in `packages/main`. The `v1.11.0` tag proved it end to end in run 36319590312. `publish` ran 162 tests and published with Trusted Publishing and provenance. `smoke` passed against the published 1.11.0. The registry took about 3 minutes to serve the new version. The wait allows about 5, with 30 tries 10 seconds apart. The run warned that `actions/checkout@v4` and `actions/setup-node@v4` target Node 20, which GitHub deprecated. `release.yml` now uses v7 of both, and its checkout sets `persist-credentials: false`, as in `ci.yml`. The `v2.0.0` tag was the first to run it on v7, in run 36397461430, and both jobs passed. The log showed neither the Node 20 warning nor npm's `Unknown user config "always-auth"` warning. setup-node v7 no longer exports a placeholder `NODE_AUTH_TOKEN`, so pnpm warns `Failed to replace env in config: ${NODE_AUTH_TOKEN}`. The warning is expected. That run printed it 3 times, once in `pnpm install` and twice in `pnpm test`. A local run of pnpm 12.6.0 with the same `.npmrc` printed it and still installed and passed the tests. Before it publishes, npm exchanges the GitHub OIDC token for a publish token and uses it in place of the token from `.npmrc`, without writing the file.
@@ -331,6 +331,72 @@ PRs: #76 CSS Grid layout and scrolling, #77 release 2.0.0, #78 release record.
 - Move `intro.md`, `examples.mdx`, `example-utils.mdx` and the API reference that typedoc generates today.
 - Deploy to GitHub Pages at https://annetaan.github.io/card-window/ from Actions.
 
+### Where things stand
+
+- `packages/website` is the workspace package `website`. It runs Astro 7.3.5 with `@astrojs/starlight` 0.42.4 and `@astrojs/react` 7.0.0, on React and React DOM 19.3.0. The API reference comes from `starlight-typedoc` 0.23.1 with typedoc 0.28.20 and typedoc-plugin-markdown 4.13.1.
+- The site depends on `@annetaan/card-window` through `workspace:*` and imports the built `packages/main/lib`. So each root `docs:` script, `docs:dev`, `docs:build` and `docs:check`, runs `pnpm build` first. `vite.resolve.dedupe: ['react', 'react-dom']` keeps one copy of React 19. Without it the library resolves React 18 from the dev dependencies of `packages/main`.
+- `astro.config.mjs` sets `site: 'https://annetaan.github.io'` and `base: '/card-window'`. It also sets the Starlight sidebar, with Guides first and the API reference after it, the `editLink` and the redirects.
+- starlight-typedoc reads `packages/main/src/index.ts` with `packages/main/tsconfig.json`. It writes into `src/content/docs/api/`, which git ignores, on every build, check and dev start. `disableSources: true` drops the "Defined in" lines. It makes 14 pages plus `/api/readme/`. "References > default" stays in the sidebar, because `default` is a real export.
+- Each example is one `.tsx` file in `src/examples/`. `Example.astro` wraps the `client:load` island in a `not-content` element and shows the file's own source, imported with `?raw`, through Starlight's `Code`. Without `not-content`, Starlight adds 16px above every card after the first. `src/examples/shared.tsx` holds the helpers `SampleCard`, `LoadingCard`, `Toolbar` and `useSelect`, and `/example-utils/` shows that file.
+- The home page is a splash page with a small demo island. `/intro/` covers the install, the requirements and the usage, and links to "Upgrading from 1.x" in the README. `/examples/` has 11 examples: Minimal, RootStyle, ContainerStyle, CardPositions, AutoColumns, CapColumns, OverScan, ScrollEvent, ScrollRef, LoadingCards and LoadingRow.
+- The root `lint`, `format` and `format:check` run `pnpm -r`, so the lint and format steps of `ci.yml` cover the site. The site's `.oxlintrc.json` extends `packages/main/.oxlintrc.json`. oxfmt uses the root `.oxfmtrc.json` and formats `.tsx`, `.mdx` and `.md`, but not `.astro`. `astro check` type-checks the site, the examples included.
+- `.github/workflows/docs.yml` builds the site on every PR. On a push to `main`, or a manual run on `main`, it also uploads `packages/website/dist` and deploys it with `actions/deploy-pages@v5`. Astro writes `dist/.prerender` during the build and removes it when the static pages are done, so `dist` holds only the site.
+- The build prints three warnings from upstream. They are harmless. rolldown reports `MODULE_LEVEL_DIRECTIVE` for `"use astro:head-inject"` in each `.mdx`. Starlight reports `collection "i18n" does not exist` and `Entry docs → 404 was not found`.
+
+### Commits
+
+- `f675652` replaced the Docusaurus site with an Astro Starlight skeleton.
+- `87674c8` added `docs.yml`.
+- `468e9c3` generated the API reference with starlight-typedoc.
+- `64649d8` dropped the typedoc 3 workarounds from the JSDoc.
+- `5790bee` ported the layout examples.
+- `60ba2ca` ported the scroll and loading examples.
+- The last commit added the redirects, removed the 1.x sentence from both READMEs and updated this plan.
+
+### Changes from the plan made during the work
+
+- The plan said the JS in `lib/` would stay byte-identical. It differs from `64a16d1` in comment lines only. tsdown (rolldown) keeps the JSDoc of runtime declarations. So the comments that task 4 added to `range` and `CardWindow` show up in `lib/esm/index.mjs` and `lib/cjs/index.js`. The type files also differ in comments only. `npm pack` still lists 6 files.
+- Links carry the base. The hero actions and the links in the content start with `/card-window/`. The redirect targets do too, because Astro does not add the base to them.
+- `useTabs` is gone. `AutoColumns` uses `useSelect`.
+- `LoadingCard` moved into task 5, so `/example-utils/` shows the whole helper file from the start.
+- `CapColumns` uses 100px cards. The content column is about 598px wide in a 1280px window, and about 564px inside an Example frame. With 200px cards it could not show 5 columns. It measures the scrollbar gutter through the 2.0 `ref`.
+- `ScrollEvent` shows the `onScroll` values on the page instead of in the console.
+- The fake loading delay is 1000ms. Docusaurus used 2000ms.
+- `/examples/` describes `updateWasRequested` as "true when the scroll moved the rendered rows, whether or not code started the scroll". The JSDoc says "true when this scroll changed the rendered row range". Both mean the same.
+- The typedoc 3 workarounds left the JSDoc: "Missing description of function-type" and the duplicated `loadMore` and `getKey` blocks. Empty and missing docs were filled in. `LoadingCard.Component` and `LoadingRow.Component` became `LoadingComponent`.
+- pnpm 12 failed the install with `ERR_PNPM_IGNORED_BUILDS` for esbuild, a dependency of astro. `allowBuilds: { esbuild: false }` fixes it, and the site builds without that script.
+- The design review did not run. It could not start for this run.
+
+### Lockfile
+
+The lockfile went from 246 `packages` entries to 660, with 414 added and none removed. No entry that stayed changed. In `snapshots`, 7 entries were re-keyed through workspace peers with no version change: `vite@8.3.1`, `vitest@5.0.2`, `@vitest/browser`, `@vitest/browser-playwright`, `@vitest/mocker`, `tsdown@0.23.0` and `rolldown-plugin-dts@0.28.6`. `@vitest/ui`, `@vitest/coverage-v8` and `vitest-browser-react` kept their keys and now point at the re-keyed `vitest`. As in the earlier phases, these counts leave out the 15 entries for pnpm itself.
+
+### Checks
+
+On this branch `pnpm lint`, `pnpm format:check` and `pnpm typecheck` pass. `pnpm test` reports 93 tests passed and `pnpm test:browser` 41. `pnpm build` passes. `pnpm docs:check` reports 0 errors, and `pnpm docs:build` builds 20 pages.
+
+I checked the examples by hand in `astro preview` in headless Chromium. Every island hydrates with no console errors. The cards of one row share the same top. Each select changes its example. CapColumns shows 1 to 5 columns. The loading examples stop at 100 cards.
+
+`pnpm docs:build` writes a redirect page for each of the four Docusaurus URLs: `/docs/intro/`, `/docs/examples/`, `/docs/example-utils/` and `/docs/api/modules/`. These are the four HTML pages under `docs/` on `origin/gh-pages`. In `astro preview` each one lands on its new page, `/docs/api/modules/` on `/api/readme/`.
+
+The CI run IDs on the PR go here later.
+
+### After merge
+
+Some steps wait for michiharu's go-ahead. The record PR fills them in.
+
+1. Right before the merge, switch Pages to `build_type: workflow`, with michiharu's go-ahead. The main session does it. It is not a task.
+2. Add a `main`-only deployment branch policy to the `github-pages` environment, with michiharu's go-ahead.
+3. Confirm that the push run of `docs.yml` deployed, that https://annetaan.github.io/card-window/ serves the Starlight site, and that `/card-window/docs/intro/` redirects.
+4. After that, delete `origin/gh-pages`, with michiharu's go-ahead. It holds the Docusaurus build for 1.x from 2022-09-22.
+5. The npm page picks up the README change with the next release.
+
+### Done when
+
+- `ci (18)`, `ci (19)` and the build job of `Docs` are green on the PR.
+- The push run on `main` deploys.
+- The site and the four redirects answer at annetaan.github.io.
+
 ## Decisions
 
 Decided on 2026-09-27.
@@ -408,6 +474,20 @@ Decided for the 2.0.0 release on 2026-09-28.
 - The README's "Upgrading from 1.x", phase 4 "What changes for consumers" and the section of the release PR stay in step.
 - Release notes: a GitHub Release, created by hand after the publish, with its body taken from the PR. No CHANGELOG file, as for 1.11.0.
 - The "Learn more" link stays, with a sentence that the site describes 1.x until it is rebuilt.
+
+Decided for phase 5 on 2026-09-28.
+
+- Astro Starlight replaces Docusaurus in `packages/website`. The package keeps its name and joins the workspace.
+- The site depends on `workspace:*` and deploys on every push to `main`. The examples and the API reference describe `main`, which can run ahead of npm between releases.
+- The examples are live React islands. They cannot be edited on the page. Each one shows the source of its own file.
+- The site does not copy "Upgrading from 1.x". It links to the README. The README, phase 4 and the release PR keep the three copies in step.
+- `pnpm-workspace.yaml` sets `allowBuilds: { esbuild: false }`.
+- The root `lint`, `format` and `format:check` run in every workspace package. `typecheck`, `test`, `test:browser` and `build` stay on card-window. `docs.yml` type-checks the site with `astro check`, after `pnpm build`.
+- `docs.yml` is separate from `ci.yml`. The site builds once, not once per React leg, and only the deploy job holds Pages permissions.
+- GitHub Pages is served from Actions, and the `github-pages` environment accepts `main` only. Both are repository settings, changed with michiharu's go-ahead. They are not files in the repository.
+- `origin/gh-pages` is deleted after the first deploy from Actions is confirmed.
+- The four Docusaurus URLs redirect through Astro `redirects`.
+- The "Learn more" link loses the sentence about 1.x. This replaces the 2.0.0 decision that kept it.
 
 ## Open questions
 

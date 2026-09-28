@@ -6,6 +6,13 @@ import starlightTypeDoc, { typeDocSidebarGroup } from 'starlight-typedoc';
 export default defineConfig({
   site: 'https://annetaan.github.io',
   base: '/card-window',
+  // The Docusaurus site served these paths. Astro does not prefix redirect targets with `base`.
+  redirects: {
+    '/docs/intro': '/card-window/intro/',
+    '/docs/examples': '/card-window/examples/',
+    '/docs/example-utils': '/card-window/example-utils/',
+    '/docs/api/modules': '/card-window/api/readme/',
+  },
   integrations: [
     starlight({
       title: 'card-window',
