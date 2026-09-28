@@ -6,13 +6,14 @@
 - `pnpm build`: builds card-window.
 - `pnpm test`: runs the unit tests with Vitest in jsdom.
 - `pnpm test:browser`: runs the browser tests with Vitest Browser Mode in headless Chromium through Playwright.
+- `pnpm bench`: builds the page in `packages/main/bench` with Vite and measures mounting, scrolling and resizing in headless Chromium at 4x CPU throttling. It prints a Markdown table of medians over 5 runs, and `--runs=N` changes the count.
 - `pnpm coverage`: runs the unit tests with a coverage report.
 - `pnpm typecheck`: type-checks `src`, test files included, with `tsc`.
 - `pnpm lint`: lints `packages/main` with oxlint.
 - `pnpm format`: formats `packages/main` with oxfmt.
 - `pnpm format:check`: checks the format without writing, as CI does.
 
-Install Chromium once before the first `pnpm test:browser`.
+Install Chromium once before the first `pnpm test:browser` or `pnpm bench`.
 Run `pnpm --filter @annetaan/card-window exec playwright install --only-shell chromium`.
 To watch the tests in a window, pass `--browser.headless=false`.
 

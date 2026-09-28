@@ -3,6 +3,7 @@
   "private": true,
   "packageManager": "pnpm@12.6.0",
   "scripts": {
+    "bench": "pnpm --filter @annetaan/card-window bench",
     "build": "pnpm --filter @annetaan/card-window build",
     "ci": "pnpm run fix && pnpm run test",
     "coverage": "pnpm --filter @annetaan/card-window test --coverage",

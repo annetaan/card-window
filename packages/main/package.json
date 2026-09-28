@@ -39,6 +39,7 @@
     "/lib"
   ],
   "scripts": {
+    "bench": "node bench/run.mts",
     "build": "tsdown",
     "coverage": "vitest run --project unit --coverage",
     "fix": "oxlint --fix && oxfmt && npx sort-package-json",
