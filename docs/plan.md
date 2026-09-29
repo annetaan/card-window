@@ -555,6 +555,11 @@ Release 2.2.0 happened on 2026-09-29.
 - The registry answered 404 6 times, 10 seconds apart, and served 2.2.0 72 seconds after `publish` finished.
 - npm `latest` is 2.2.0. The GitHub Release v2.2.0 was created with michiharu's go-ahead and is marked Latest. Its body is the consumer section of #88 under one opening sentence, with one more sentence each on the narrow frame and the README.
 
+Decided after 2.2.0 on 2026-09-29.
+
+- The repository keeps one README, at the root. `prepack` in `packages/main` copies it into the package before the build, and `packages/main/.gitignore` ignores the copy. `npm pack --dry-run` lists the 6.1kB README. The npm page now shows the same centred heading as GitHub. This replaces the 2.0.0 decision that the two READMEs stay identical apart from the first line. A change to the README no longer has to be made twice.
+- Issues #43, #58 and #60 are closed. #79 rebuilt the docs site, #64 to #72 replaced the toolchain, and the pnpm workspace from #64 covers what turborepo was meant for. #26, the logo, stays open.
+
 ## Open questions
 
 - Each layout in the scroll scenarios costs 1.4 to 1.8 times what it did in 1.11.0, for the same 185 layouts. Not traced.

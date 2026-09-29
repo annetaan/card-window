@@ -46,7 +46,7 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "oxlint",
-    "prepack": "npm run build",
+    "prepack": "cp ../../README.md . && npm run build",
     "test": "vitest run --project unit",
     "test:browser": "vitest run --project browser",
     "typecheck": "tsc --noEmit",
