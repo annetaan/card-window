@@ -548,6 +548,13 @@ Decided for the known limitations on 2026-09-29.
   - Development builds warn once when the frame has no height.
 - The release is 2.2.0, a minor, because of the `minWidth` removal and the narrower `container.style` type. The 2.2.0 release PR bumps `version` and adds the height paragraph under Usage in both READMEs. The GitHub Release body comes from the "What changes for consumers" section of #87.
 
+Release 2.2.0 happened on 2026-09-29.
+
+- #87 merged as `401d9f4` and #88 as `e2c91e2`. The push run on `e2c91e2` passed `ci (18)` and `ci (19)`. michiharu then gave the go-ahead, and the `v2.2.0` tag went onto `e2c91e2`.
+- Run 36514020237 of `release.yml` passed all five jobs. `check-tag` took 6 seconds. `ci / ci (18)` and `ci / ci (19)` took 61 and 60 seconds, with 93 unit tests and 58 browser tests on each leg. `publish` took 19 seconds and published 2.2.0 with provenance through Trusted Publishing. `smoke` passed against the published 2.2.0.
+- The registry answered 404 6 times, 10 seconds apart, and served 2.2.0 72 seconds after `publish` finished.
+- npm `latest` is 2.2.0. The GitHub Release v2.2.0 was created with michiharu's go-ahead and is marked Latest. Its body is the consumer section of #88 under one opening sentence, with one more sentence each on the narrow frame and the README.
+
 ## Open questions
 
 - Each layout in the scroll scenarios costs 1.4 to 1.8 times what it did in 1.11.0, for the same 185 layouts. Not traced.
