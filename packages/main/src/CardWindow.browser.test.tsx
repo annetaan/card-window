@@ -16,8 +16,9 @@ import { CardProps, CardWindow, CardWindowProps, JustifyContent, Loading, OnScro
 // The widths 180, 280, 400, 600 and 820 give 1, 2, 3, 5 and 7 columns. At each
 // of them the space-evenly rule of 1.11.0, floor((w - 24) / 108), and the rule
 // for everything else, which CSS Grid auto-fill also follows,
-// floor((w - 8) / 108), agree, even with a 17px classic scrollbar. Headless
-// Chromium hides scrollbars (width 0).
+// floor((w - 8) / 108), agree, even with a 17px classic scrollbar. An
+// unstyled scrollbar overlays the content on macOS and takes about 15px on
+// Linux, so no test here may depend on the gutter of an unstyled root.
 //
 // Scroll offsets sit far from every threshold. The visible-rows math of 1.11.0
 // ignores spacing.top (8px off), so no card's visible fraction may sit near
@@ -32,12 +33,16 @@ const Card = ({ index, style }: CardProps) => <div data-card-index={index} style
 type Props = Omit<CardWindowProps, 'cardRect' | 'children'>;
 
 // CardWindow's root element is the scroll container, the first element child
-// of the sized frame.
-const renderCardWindow = async (width: number, height: number, props: Props) => {
+// of the frame.
+const renderInFrame = async (
+  frameStyle: React.CSSProperties,
+  props: Props,
+  card: (props: CardProps) => React.ReactNode = Card,
+) => {
   const screen = await render(
-    <div data-testid="frame" style={{ width, height }}>
+    <div data-testid="frame" style={frameStyle}>
       <CardWindow cardRect={cardRect} {...props}>
-        {Card}
+        {card}
       </CardWindow>
     </div>,
   );
@@ -45,6 +50,8 @@ const renderCardWindow = async (width: number, height: number, props: Props) => 
   const scroller = frame.firstElementChild as HTMLElement;
   return { frame, scroller };
 };
+
+const renderCardWindow = (width: number, height: number, props: Props) => renderInFrame({ width, height }, props);
 
 const cards = (scroller: HTMLElement) =>
   Array.from(scroller.querySelectorAll<HTMLElement>('[data-card-index]'))
@@ -67,6 +74,12 @@ const indexesInView = (scroller: HTMLElement) => {
 // Serves both loading types, since both give the component a style.
 const LoadingComponent = ({ style }: { style: React.CSSProperties }) => <div data-loading="" style={style} />;
 
+// A card and a loading component that ignore the width CardWindow gives them.
+const WideCard = ({ index, style }: CardProps) => <div data-card-index={index} style={{ ...style, width: 200 }} />;
+const WideLoadingComponent = ({ style }: { style: React.CSSProperties }) => (
+  <div data-loading="" style={{ ...style, width: 600, flexShrink: 0 }} />
+);
+
 const nextFrames = () =>
   new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 
@@ -78,12 +91,8 @@ const loadingInView = (scroller: HTMLElement) => {
   return rect.bottom > view.top && rect.top < view.bottom;
 };
 
-// Gives a root with the classic-scrollbar class a 15px scrollbar on every
-// platform, and collects window errors while run is in progress.
-const withClassicScrollbar = async (run: (errors: string[]) => Promise<void>) => {
-  const style = document.createElement('style');
-  style.textContent = '.classic-scrollbar::-webkit-scrollbar { width: 15px; }';
-  document.head.appendChild(style);
+// Collects window errors while run is in progress.
+const withWindowErrors = async (run: (errors: string[]) => Promise<void>) => {
   const errors: string[] = [];
   const onError = (e: ErrorEvent) => errors.push(e.message);
   window.addEventListener('error', onError);
@@ -91,6 +100,18 @@ const withClassicScrollbar = async (run: (errors: string[]) => Promise<void>) =>
     await run(errors);
   } finally {
     window.removeEventListener('error', onError);
+  }
+};
+
+// Gives a root with the classic-scrollbar class a 15px scrollbar on both axes
+// on every platform, and collects window errors while run is in progress.
+const withClassicScrollbar = async (run: (errors: string[]) => Promise<void>) => {
+  const style = document.createElement('style');
+  style.textContent = '.classic-scrollbar::-webkit-scrollbar { width: 15px; height: 15px; }';
+  document.head.appendChild(style);
+  try {
+    await withWindowErrors(run);
+  } finally {
     style.remove();
   }
 };
@@ -260,9 +281,8 @@ describe('rendering', () => {
 });
 
 describe('classic scrollbar', () => {
-  // The root reserves a stable scrollbar gutter. Headless Chromium hides the
-  // scrollbar itself, but the gutter still takes the 15px the style below
-  // gives the scrollbar, as a classic scrollbar would. The widths above still
+  // The root reserves a stable scrollbar gutter, and the style below gives it
+  // a visible 15px classic scrollbar on every platform. The widths above still
   // fit the same column counts with 15px less content width. A reserved gutter
   // also means the scrollbar showing up does not resize the observed content
   // box, which with a visible classic scrollbar used to fire a window error,
@@ -329,7 +349,7 @@ describe('justifyContent start and end', () => {
 describe('space-evenly column count', () => {
   // 1.11.0 fit 2 columns and auto-fill fits 3 only where the client width is
   // 332px to 347px. That band is too narrow to leave the scrollbar to the
-  // platform. Headless Chromium on macOS hides it, and on Linux in CI it
+  // platform. Headless Chromium on macOS overlays it, and on Linux in CI it
   // reserves a classic scrollbar's width. So the gutter is pinned at 15px. The
   // client width is 340px and the content 324px, where auto-fill fits
   // floor((324 + 8) / 108) = 3 columns. 1.11.0 kept a gap on both outer sides
@@ -507,4 +527,84 @@ describe('scroll commits', () => {
     }
     expect(commits).toBeLessThanOrEqual(11);
   });
+});
+
+describe('horizontal overflow', () => {
+  // A 200px card in a 100px column, a 600px loading card or loading row in a
+  // 400px frame, and an 80px frame, narrower than one card. None of them may
+  // make the root scroll sideways. With a classic scrollbar a horizontal one
+  // would take 15px of height and resize the observed box, which fires
+  // "ResizeObserver loop completed with undelivered notifications".
+  test.fails.each([
+    ['a card wider than its column', 400, { data: range(100), justifyContent: 'left' }, WideCard],
+    [
+      'a loading card wider than its column',
+      400,
+      { data: range(2), loading: { type: 'card', count: 1, LoadingComponent: WideLoadingComponent } },
+      Card,
+    ],
+    [
+      'a loading row wider than the root',
+      400,
+      { data: range(2), loading: { type: 'row', height: 50, LoadingComponent: WideLoadingComponent } },
+      Card,
+    ],
+    ['a frame narrower than one card', 80, { data: range(100) }, Card],
+  ] satisfies [string, number, Props, (props: CardProps) => React.ReactNode][])(
+    '%s does not scroll the root sideways or fire a window error',
+    (_, width, props, card) =>
+      withClassicScrollbar(async (errors) => {
+        const { scroller } = await renderInFrame(
+          { width, height: 330 },
+          { ...props, root: { className: 'classic-scrollbar' } },
+          card,
+        );
+        await expect.poll(() => cards(scroller).length).toBeGreaterThan(0);
+        await nextFrames();
+        await nextFrames();
+        expect(errors).toEqual([]);
+        expect(scroller.scrollWidth).toBe(scroller.clientWidth);
+        expect(scroller.offsetHeight - scroller.clientHeight).toBe(0);
+      }),
+  );
+});
+
+describe('frame without a height', () => {
+  // The root grows with its content, so all 100 cards render. The resize
+  // callback then changes the height of the box it observes, which fires
+  // "ResizeObserver loop completed with undelivered notifications", with or
+  // without a visible scrollbar.
+  test.fails('mounts without a window error', () =>
+    withWindowErrors(async (errors) => {
+      const { scroller } = await renderInFrame({ width: 400 }, { data: range(100) });
+      await expect.poll(() => cards(scroller).length).toBe(100);
+      await nextFrames();
+      expect(errors).toEqual([]);
+    }));
+
+  test.fails('changes width without a window error', () =>
+    withWindowErrors(async (errors) => {
+      const { frame, scroller } = await renderInFrame({ width: 400 }, { data: range(100) });
+      await expect.poll(() => cards(scroller).length).toBe(100);
+      await nextFrames();
+      errors.length = 0;
+      for (let width = 410; width <= 600; width += 10) {
+        frame.style.width = `${width}px`;
+        await nextFrames();
+      }
+      await expect.poll(() => columnCount(scroller)).toBe(5);
+      await nextFrames();
+      expect(errors).toEqual([]);
+    }));
+
+  test.fails('mounts without a window error when root.style.maxHeight bounds the root', () =>
+    withWindowErrors(async (errors) => {
+      const { scroller } = await renderInFrame(
+        { width: 400 },
+        { data: range(100), root: { style: { maxHeight: 330 } } },
+      );
+      await expect.poll(() => columnCount(scroller)).toBe(3);
+      await nextFrames();
+      expect(errors).toEqual([]);
+    }));
 });

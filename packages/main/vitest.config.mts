@@ -18,7 +18,11 @@ export default defineConfig({
           browser: {
             enabled: true,
             headless: true,
-            provider: playwright(),
+            // Playwright launches headless Chromium with --hide-scrollbars, which
+            // takes the space of a horizontal scrollbar away even when a test
+            // styles it with ::-webkit-scrollbar. Without the flag a styled
+            // scrollbar is a visible classic one on macOS as on Linux.
+            provider: playwright({ launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } }),
             instances: [{ browser: 'chromium' }],
           },
         },
