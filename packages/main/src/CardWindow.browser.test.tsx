@@ -10,6 +10,11 @@ import { CardProps, CardWindow, CardWindowProps, JustifyContent, Loading, OnScro
 // real layout (getBoundingClientRect), DOM presence and callback arguments,
 // never style px values or the row/col props.
 //
+// One group, `layout reads while scrolling`, breaks that rule on purpose. It
+// counts calls to getComputedStyle and to the scrollTop getter, because a
+// forced layout during scrolling cannot be seen from the outside, and CI does
+// not run the bench.
+//
 // Geometry: cards are 100 x 100 with the default spacing of 8, so the row
 // pitch is 108 and row r spans [8 + 108r, 108 + 108r] in content coordinates.
 //
@@ -625,6 +630,50 @@ describe('scroll commits', () => {
       observer.disconnect();
     }
     expect(commits).toBeLessThanOrEqual(11);
+  });
+});
+
+describe('layout reads while scrolling', () => {
+  // Each read of computed style or scrollTop right after a commit forces a
+  // layout. vi.spyOn does not see CardWindow's calls in Browser Mode, so the
+  // test wraps getComputedStyle and the scroller's scrollTop by hand.
+  test('reads no computed style and scrollTop at most once per frame', async () => {
+    const { scroller } = await renderCardWindow(400, 330, { data: range(300) });
+    await expect.poll(() => columnCount(scroller)).toBe(3);
+    await nextFrames();
+    let styleReads = 0;
+    let scrollTopReads = 0;
+    const original = window.getComputedStyle;
+    window.getComputedStyle = (...args) => {
+      styleReads += 1;
+      return original.apply(window, args);
+    };
+    const scrollTop = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop');
+    if (!scrollTop?.get || !scrollTop.set) throw new Error('Element.prototype.scrollTop has no accessor');
+    const { get, set } = scrollTop;
+    Object.defineProperty(scroller, 'scrollTop', {
+      configurable: true,
+      get() {
+        scrollTopReads += 1;
+        return get.call(this);
+      },
+      set(value: number) {
+        set.call(this, value);
+      },
+    });
+    try {
+      // Assign, never add, so the test itself never reads scrollTop.
+      for (let i = 1; i <= 36; i += 1) {
+        scroller.scrollTop = i * 30;
+        await nextFrames();
+      }
+    } finally {
+      Reflect.deleteProperty(scroller, 'scrollTop');
+      window.getComputedStyle = original;
+    }
+    expect(styleReads).toBe(0);
+    // The scroll handler reads scrollTop once per animation frame, and nothing else may.
+    expect(scrollTopReads).toBeLessThanOrEqual(36);
   });
 });
 
