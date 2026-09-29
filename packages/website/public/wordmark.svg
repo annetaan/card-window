@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 164 32">
+  <style>text { fill: #1b2240 } @media (prefers-color-scheme: dark) { text { fill: #e8ebf7 } }</style>
+  <rect width="32" height="32" rx="6" fill="#3048b0" />
+  <g fill="#fff">
+    <rect x="5" y="5" width="10" height="10" rx="2" />
+    <rect x="17" y="5" width="10" height="10" rx="2" />
+    <rect x="5" y="17" width="10" height="10" rx="2" />
+    <rect x="17" y="17" width="10" height="10" rx="2" opacity="0.5" />
+  </g>
+  <text x="42" y="23" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="20" font-weight="700">card-window</text>
+</svg>

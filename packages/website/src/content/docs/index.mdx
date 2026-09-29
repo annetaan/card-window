@@ -3,7 +3,7 @@ title: card-window
 description: A React component that renders only the cards of a large data set that fill the view.
 template: splash
 hero:
-  tagline: It renders only the part of a large data set that fills the view.
+  tagline: Ten thousand cards.<br />One screenful of DOM.
   actions:
     - text: Get started
       link: /card-window/intro/
@@ -20,7 +20,7 @@ hero:
 import { Card, CardGrid } from '@astrojs/starlight/components';
 import HomeDemo from '../../examples/HomeDemo';
 
-<div class="not-content">
+<div class="not-content" style={{ marginBottom: '2rem' }}>
   <HomeDemo client:load />
 </div>
 
