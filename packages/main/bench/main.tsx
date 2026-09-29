@@ -2,23 +2,31 @@ import * as React from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { type CardProps, CardWindow, range } from '../src';
+import { scrollStepPx, scrollSteps } from './scroll.mts';
 
 // The page that bench/run.mts drives. It uses only props that exist in both
 // 1.11.0 and 2.0, so the same page measures both.
+//
+// run.mts calls start(), then drives the scenario, then calls finish().
+// drive() runs the steps of a scenario that the page drives itself. The wheel
+// scenario has none, because run.mts scrolls it with CDP input between start()
+// and finish().
 
-type RunResult = { frameIntervals: number[]; domNodes: number; commits: number };
+type RunResult = { frameIntervals: number[]; domNodes: number; commits: number; scrollTop: number };
 
 declare global {
   interface Window {
     __bench: {
       ready: Promise<void>;
       cardRenders: number;
-      run(): Promise<RunResult>;
+      start(): void;
+      drive(): Promise<void>;
+      finish(): Promise<RunResult>;
     };
   }
 }
 
-const scenarios = ['mount', 'scroll', 'scroll-onscroll', 'resize'] as const;
+const scenarios = ['mount', 'scroll', 'scroll-onscroll', 'resize', 'wheel'] as const;
 type Scenario = (typeof scenarios)[number];
 
 const param = new URLSearchParams(window.location.search).get('scenario');
@@ -62,23 +70,19 @@ const mount = () => root.render(<App onScroll={scenario === 'scroll-onscroll' ? 
 
 const cardsPresent = () => frame.querySelector('[data-card-index]') !== null;
 
-// The first interval starts at the call, so a mount that shows cards in the
-// first frame still records one.
-const waitForCards = async (intervals: number[]) => {
-  let last = performance.now();
-  do {
-    const now = await nextFrame();
-    intervals.push(now - last);
-    last = now;
-  } while (!cardsPresent());
+const waitForCards = async () => {
+  do await nextFrame();
+  while (!cardsPresent());
 };
 
-// Each step runs in its own frame.
+const scroller = () => frame.firstElementChild as HTMLElement | null;
+
+// The steps that drive() runs, each in its own frame.
 const steps = (s: Scenario): Array<() => void> => {
-  const scroller = () => frame.firstElementChild as HTMLElement;
   if (s === 'scroll' || s === 'scroll-onscroll') {
-    return range(600).map(() => () => {
-      scroller().scrollTop += 40;
+    return range(scrollSteps).map(() => () => {
+      const el = scroller();
+      if (el) el.scrollTop += scrollStepPx;
     });
   }
   if (s === 'resize') {
@@ -105,37 +109,55 @@ const countCommits = () => {
   };
 };
 
-const run = async (): Promise<RunResult> => {
-  const frameIntervals: number[] = [];
-  const stopCounting = countCommits();
+// Between start() and finish(), a frame loop records one interval per frame.
+// The first interval starts at start(), so a mount that shows cards in the
+// first frame still records one.
+let frameIntervals: number[] = [];
+let frameLoop = 0;
+let stopCounting = () => 0;
+
+const start = () => {
+  frameIntervals = [];
+  stopCounting = countCommits();
+  let last = performance.now();
+  const loop = (now: number) => {
+    frameIntervals.push(now - last);
+    last = now;
+    frameLoop = requestAnimationFrame(loop);
+  };
+  frameLoop = requestAnimationFrame(loop);
+};
+
+const drive = async () => {
   if (scenario === 'mount') {
     mount();
-    await waitForCards(frameIntervals);
-  } else {
-    let last = await nextFrame();
-    for (const step of steps(scenario)) {
-      step();
-      const now = await nextFrame();
-      frameIntervals.push(now - last);
-      last = now;
-    }
+    await waitForCards();
+    return;
   }
+  for (const step of steps(scenario)) {
+    step();
+    await nextFrame();
+  }
+};
+
+const finish = async (): Promise<RunResult> => {
+  cancelAnimationFrame(frameLoop);
   // Let renders that are still queued land before the counts and the metrics
-  // are read. The frame intervals above stop before this.
+  // are read. The frame intervals stop before this.
   await nextFrame();
   await nextFrame();
-  const scroller = frame.firstElementChild;
-  const domNodes = scroller ? scroller.querySelectorAll('*').length : 0;
-  return { frameIntervals, domNodes, commits: stopCounting() };
+  const el = scroller();
+  const domNodes = el ? el.querySelectorAll('*').length : 0;
+  return { frameIntervals, domNodes, commits: stopCounting(), scrollTop: el ? el.scrollTop : 0 };
 };
 
 const ready = async () => {
   if (scenario === 'mount') return;
   mount();
-  await waitForCards([]);
+  await waitForCards();
   await nextFrame();
   await nextFrame();
 };
 
-window.__bench = { ready: Promise.resolve(), cardRenders: 0, run };
+window.__bench = { ready: Promise.resolve(), cardRenders: 0, start, drive, finish };
 window.__bench.ready = ready();

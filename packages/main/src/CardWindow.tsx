@@ -321,6 +321,7 @@ const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : us
 const defaultSpacing: Spacing = { x: 8, y: 8, top: 8, bottom: 8, left: 8, right: 8 };
 
 type Latest = {
+  /** The rows of the last commit, or the last range the scroll handler requested, whichever is later. */
   rows: [number, number];
   rowCount: number;
   viewHeight: number;
@@ -487,6 +488,8 @@ const CardWindowRender = <T extends any[]>(
   }, [cols]);
 
   // The scroll handler reads what it needs from here. It is written after every commit, never during render.
+  // The scroll handler also writes rows when it requests a new range, so a frame that runs before that commit
+  // compares against the range already requested.
   const latest = useRef<Latest | null>(null);
   useIsomorphicLayoutEffect(() => {
     latest.current = {
@@ -502,6 +505,23 @@ const CardWindowRender = <T extends any[]>(
       onScroll,
       loadMore: loading?.loadMore,
     };
+  });
+
+  // Reading the layout back forces one, so this runs only after commits that can change what it reads.
+  // Column count: measure, plus what decides the grid tracks and the sizer's content width. The root's own width
+  // arrives through the ResizeObserver and changes measure.
+  // Range from the live scrollTop: what moves the range, or the browser's clamp of scrollTop, for a given position.
+  // measure also covers viewHeight and cols.
+  // A commit that only moved the offset, as every scroll commit does, reads nothing from the layout.
+  // Lint does not check this list, because react/exhaustive-deps does not know useIsomorphicLayoutEffect. The browser
+  // tests `column count after a prop change` and `render range after a prop change` fail without any one of
+  // card.width, spacing.x, spacing.left, container.style, container.className or overScanPx. `data shrink` fails
+  // only without both rowCount and scrollContainerHeight, because a length change moves both. No test fails on one
+  // of the rest. Some cannot. justify leaves the auto-fill column count the same. card.height, spacing.y and
+  // spacing.top each also change scrollContainerHeight. A column change moves rowCount too, so measure alone
+  // matters only when the view height changes. A test could still cover that, spacing.right, and spacing.bottom
+  // or a `type: 'row'` loading, which only scrollContainerHeight carries.
+  useIsomorphicLayoutEffect(() => {
     // Only the scroll container is observed, so a sizer narrowed by CardWindow's own props shows up here,
     // after the commit that narrowed it. Observing the sizer would risk a ResizeObserver loop.
     const nextCols = readColumnCount(gridRef.current);
@@ -515,7 +535,22 @@ const CardWindowRender = <T extends any[]>(
     if (!el) return;
     const next = getRenderRange(el.scrollTop, viewHeight, overScanPx, rowCount, card, spacing);
     if (!sameRange(next, rows)) setOffset(el.scrollTop);
-  });
+  }, [
+    measure,
+    card.width,
+    justify,
+    spacing.x,
+    spacing.left,
+    spacing.right,
+    container.className,
+    container.style,
+    rowCount,
+    scrollContainerHeight,
+    overScanPx,
+    card.height,
+    spacing.y,
+    spacing.top,
+  ]);
 
   useEffect(() => {
     const el = scrollerRef.current;
@@ -535,7 +570,10 @@ const CardWindowRender = <T extends any[]>(
         current.spacing,
       );
       const changed = !sameRange(next, current.rows);
-      if (changed) setOffset(scrollTop);
+      if (changed) {
+        current.rows = next;
+        setOffset(scrollTop);
+      }
       if (current.onScroll) {
         const margin = -current.card.height * current.thresholdOfVisible;
         const vis = getRowRange(scrollTop, current.viewHeight, margin, current.rowCount, current.card, current.spacing);
