@@ -576,11 +576,10 @@ describe('horizontal overflow', () => {
 });
 
 describe('frame without a height', () => {
-  // The root grows with its content, so all 100 cards render. The resize
-  // callback then changes the height of the box it observes, which fires
-  // "ResizeObserver loop completed with undelivered notifications", with or
-  // without a visible scrollbar.
-  test.fails('mounts without a window error', () =>
+  // The root grows with its content, so all 100 cards render. When the root's
+  // height equals the sizer's, CardWindow renders outside the resize callback,
+  // so the observed box does not change during the callback.
+  test('mounts without a window error', () =>
     withWindowErrors(async (errors) => {
       const { scroller } = await renderInFrame({ width: 400 }, { data: range(100) });
       await expect.poll(() => cards(scroller).length).toBe(100);
@@ -588,7 +587,7 @@ describe('frame without a height', () => {
       expect(errors).toEqual([]);
     }));
 
-  test.fails('changes width without a window error', () =>
+  test('changes width without a window error', () =>
     withWindowErrors(async (errors) => {
       const { frame, scroller } = await renderInFrame({ width: 400 }, { data: range(100) });
       await expect.poll(() => cards(scroller).length).toBe(100);
@@ -603,7 +602,7 @@ describe('frame without a height', () => {
       expect(errors).toEqual([]);
     }));
 
-  test.fails('mounts without a window error when root.style.maxHeight bounds the root', () =>
+  test('mounts without a window error when root.style.maxHeight bounds the root', () =>
     withWindowErrors(async (errors) => {
       const { scroller } = await renderInFrame(
         { width: 400 },
@@ -613,4 +612,34 @@ describe('frame without a height', () => {
       await nextFrames();
       expect(errors).toEqual([]);
     }));
+
+  // A ResizeObserver registered after mount runs after CardWindow's in the
+  // same frame, just before the paint, so it sees what that paint shows.
+  test('shows every card at the paint after data grows', async () => {
+    const app = (length: number) => (
+      <div data-testid="frame" style={{ width: 400 }}>
+        <CardWindow cardRect={cardRect} data={range(length)}>
+          {Card}
+        </CardWindow>
+      </div>
+    );
+    const screen = await render(app(3));
+    const frame = screen.container.querySelector('[data-testid="frame"]') as HTMLElement;
+    const scroller = frame.firstElementChild as HTMLElement;
+    await expect.poll(() => cards(scroller).length).toBe(3);
+    await nextFrames();
+    const seen: number[] = [];
+    const observer = new ResizeObserver(() => seen.push(cards(scroller).length));
+    observer.observe(scroller);
+    try {
+      await nextFrames();
+      seen.length = 0;
+      await screen.rerender(app(60));
+      await expect.poll(() => seen.length).toBeGreaterThan(0);
+      await nextFrames();
+      expect(seen.filter((count) => count !== 60)).toEqual([]);
+    } finally {
+      observer.disconnect();
+    }
+  });
 });

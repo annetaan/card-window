@@ -348,6 +348,7 @@ const CardWindowRender = <T extends any[]>(
   const scrollerRef = useRef<HTMLDivElement>(null);
   useImperativeHandle(parentRef, () => scrollerRef.current as HTMLDivElement, []);
   const gridRef = useRef<HTMLDivElement>(null);
+  const sizerRef = useRef<HTMLDivElement>(null);
   const [measure, setMeasure] = useState<{ viewHeight: number; cols: number } | null>(null);
   const [offset, setOffset] = useState(0);
   const cols = measure?.cols ?? 0;
@@ -403,18 +404,34 @@ const CardWindowRender = <T extends any[]>(
     justifyContent: justify,
   };
 
+  // The column count of the last commit, which sets the sizer's height. The ResizeObserver callback reads it.
+  const committedCols = useRef(0);
+  useIsomorphicLayoutEffect(() => {
+    committedCols.current = cols;
+  });
+
   // The first observation arrives before the first paint, and flushSync renders the cards before that paint too.
+  // The exception is a root whose content height equals the sizer's height while the column count changes. Such a
+  // root either follows its content (no frame height, or a maxHeight not yet reached) or is 0px tall. A new column
+  // count changes the sizer's height, so rendering inside the callback would resize the box it observes and fire
+  // "ResizeObserver loop completed with undelivered notifications". A plain state update renders after the
+  // callback. At mount such a root is 0px tall, so no cards are lost there.
   useIsomorphicLayoutEffect(() => {
     const el = scrollerRef.current;
     if (!el) return undefined;
     const observer = new ResizeObserver((entries) => {
       const viewHeight = entries[0].contentRect.height;
       const cols = readColumnCount(gridRef.current);
-      flushSync(() =>
+      // Layout is clean when the callback runs, so reading offsetHeight costs no extra layout.
+      const sizerHeight = sizerRef.current?.offsetHeight ?? 0;
+      const followsContent = Math.abs(viewHeight - sizerHeight) < 1;
+      const update = () =>
         setMeasure((prev) =>
           prev && prev.viewHeight === viewHeight && prev.cols === cols ? prev : { viewHeight, cols },
-        ),
-      );
+        );
+      // Only a new column count changes the sizer's height. More rows in a taller view leave it as it is.
+      if (followsContent && cols !== committedCols.current) update();
+      else flushSync(update);
     });
     observer.observe(el);
     return () => observer.disconnect();
@@ -528,7 +545,7 @@ const CardWindowRender = <T extends any[]>(
 
   return (
     <div ref={scrollerRef} className={root.className} style={rootStyle}>
-      <div className={container.className} style={scrollContainerStyle}>
+      <div ref={sizerRef} className={container.className} style={scrollContainerStyle}>
         <div style={windowStyle}>
           <div ref={gridRef} style={gridStyle}>
             {range(start, stop).map((i) =>
