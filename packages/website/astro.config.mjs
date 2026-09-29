@@ -16,6 +16,9 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'card-window',
+      favicon: '/logo.svg',
+      customCss: ['./src/styles/theme.css'],
+      components: { Hero: './src/components/Hero.astro' },
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/annetaan/card-window' }],
       editLink: { baseUrl: 'https://github.com/annetaan/card-window/edit/main/packages/website/' },
       // Generates the API reference from packages/main/src into git-ignored src/content/docs/api/ on build, check, dev.

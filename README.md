@@ -1,4 +1,6 @@
-<h1 align="center">card-window</h1>
+<h1 align="center">
+  <img src="https://raw.githubusercontent.com/annetaan/card-window/main/packages/website/public/wordmark.svg" height="64" alt="card-window" />
+</h1>
 
 Card window works by only rendering part of a large data set (just enough to fill the viewport).
 It is very much inspired by Brian Vaughn's react-window.

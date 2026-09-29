@@ -1,0 +1,12 @@
+/* Accent colors derived from the logo blue, #3048b0 (hue 229). */
+:root {
+  --sl-color-accent-low: hsl(229 45% 20%);
+  --sl-color-accent: hsl(229 70% 62%);
+  --sl-color-accent-high: hsl(229 90% 87%);
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: hsl(229 70% 90%);
+  --sl-color-accent: #3048b0;
+  --sl-color-accent-high: hsl(229 57% 25%);
+}
