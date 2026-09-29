@@ -334,6 +334,12 @@ type Latest = {
   loadMore: (() => void) | undefined;
 };
 
+// A max-height or min-height on the root can let its height follow the sizer's between the two limits.
+const boundedByOwnHeight = (el: HTMLElement) => {
+  const { maxHeight, minHeight } = getComputedStyle(el);
+  return maxHeight !== 'none' || (minHeight !== 'auto' && minHeight !== '0px');
+};
+
 const sameRange = (a: [number, number], b: [number, number]) => a[0] === b[0] && a[1] === b[1];
 
 const CardWindowRender = <T extends any[]>(
@@ -416,18 +422,18 @@ const CardWindowRender = <T extends any[]>(
     justifyContent: justify,
   };
 
-  // The column count of the last commit, which sets the sizer's height. The ResizeObserver callback reads it.
-  const committedCols = useRef(0);
-  useIsomorphicLayoutEffect(() => {
-    committedCols.current = cols;
-  });
+  // The column count of the last commit, which sets the sizer's height. The ResizeObserver callback reads it, and
+  // the layout effect that keeps the first visible card in view writes it.
+  const prevColsRef = useRef(0);
 
   // The first observation arrives before the first paint, and flushSync renders the cards before that paint too.
-  // The exception is a root whose content height equals the sizer's height while the column count changes. Such a
-  // root either follows its content (no frame height, or a maxHeight not yet reached) or is 0px tall. A new column
-  // count changes the sizer's height, so rendering inside the callback would resize the box it observes and fire
+  // The exception is a column count change in a root whose height can follow its content. A new column count
+  // changes the sizer's height, so rendering inside the callback would resize the box it observes and fire
   // "ResizeObserver loop completed with undelivered notifications". A plain state update renders after the
-  // callback. At mount such a root is 0px tall, so no cards are lost there.
+  // callback instead. Such a root is either as tall as the sizer (no frame height, or a maxHeight not yet reached,
+  // or 0px tall) or held by its own max-height or min-height, which the new sizer height may cross. At mount the
+  // first kind is 0px tall, so no cards are lost there. The second kind still renders inside the callback at mount,
+  // or its first paint would show no cards. A sized frame whose root sets either limit pays one stale frame here.
   useIsomorphicLayoutEffect(() => {
     const el = scrollerRef.current;
     if (!el) return undefined;
@@ -457,7 +463,8 @@ const CardWindowRender = <T extends any[]>(
           prev && prev.viewHeight === viewHeight && prev.cols === cols ? prev : { viewHeight, cols },
         );
       // Only a new column count changes the sizer's height. More rows in a taller view leave it as it is.
-      if (followsContent && cols !== committedCols.current) update();
+      const committedCols = prevColsRef.current;
+      if (cols !== committedCols && (followsContent || (committedCols !== 0 && boundedByOwnHeight(el)))) update();
       else flushSync(update);
     });
     observer.observe(el);
@@ -470,7 +477,6 @@ const CardWindowRender = <T extends any[]>(
   // Keep the first visible card in view when the column count changes. The live scrollTop may already be
   // clamped to the shorter sizer of this commit, so start from the last position the scroll handler saw.
   // Its rAF callback runs before the ResizeObserver callback in a frame, so no scroll is missed.
-  const prevColsRef = useRef(0);
   useIsomorphicLayoutEffect(() => {
     const prev = prevColsRef.current;
     prevColsRef.current = cols;

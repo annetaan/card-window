@@ -582,9 +582,11 @@ describe('frame without a height', () => {
     return () => warn.mockRestore();
   });
 
-  // The root grows with its content, so all 100 cards render. When the root's
-  // height equals the sizer's, CardWindow renders outside the resize callback,
-  // so the observed box does not change during the callback.
+  // The root grows with its content, so all 100 cards render. A new column
+  // count changes the sizer's height. When the root's height follows the
+  // sizer's, CardWindow renders that change outside the resize callback, so the
+  // observed box does not change during the callback. Other observations, such
+  // as data growing at the same column count, still render inside it.
   test('mounts without a window error', () =>
     withWindowErrors(async (errors) => {
       const { scroller } = await renderInFrame({ width: 400 }, { data: range(100) });
@@ -618,6 +620,26 @@ describe('frame without a height', () => {
       await nextFrames();
       expect(errors).toEqual([]);
     }));
+
+  // 15 cards give 5 rows (548px) at 3 columns and 3 rows (332px) at 5 columns,
+  // so each change of width moves the sizer across the root's own 440px limit.
+  test.each([
+    ['root.style.maxHeight', { width: 400 }, { maxHeight: 440 }, 600, 5],
+    ['root.style.minHeight', { width: 600 }, { minHeight: 440 }, 400, 3],
+  ] satisfies [string, React.CSSProperties, React.CSSProperties, number, number][])(
+    'changes the column count without a window error when the sizer crosses %s',
+    (_, frameStyle, rootStyle, width, columns) =>
+      withWindowErrors(async (errors) => {
+        const { frame, scroller } = await renderInFrame(frameStyle, { data: range(15), root: { style: rootStyle } });
+        await expect.poll(() => cards(scroller).length).toBe(15);
+        await nextFrames();
+        errors.length = 0;
+        frame.style.width = `${width}px`;
+        await expect.poll(() => columnCount(scroller)).toBe(columns);
+        await nextFrames();
+        expect(errors).toEqual([]);
+      }),
+  );
 
   // A ResizeObserver registered after mount runs after CardWindow's in the
   // same frame, just before the paint, so it sees what that paint shows.
