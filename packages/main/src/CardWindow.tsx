@@ -304,6 +304,18 @@ const Item = React.memo(({ Children, data, index, row, col }: ItemProps) => (
   <Children data={data} index={index} style={cardStyle} row={row} col={col} />
 ));
 
+// Bundlers and Vitest replace `process.env.NODE_ENV` as text. A `typeof process` guard would turn the warning off
+// under Vite, where `process` does not exist at runtime. The `try` covers loading the module without a bundler.
+// `src` has no Node types, so `process` is declared here by hand.
+declare const process: { env: { NODE_ENV?: string } };
+const dev = (() => {
+  try {
+    return process.env.NODE_ENV !== 'production';
+  } catch {
+    return false;
+  }
+})();
+
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 const defaultSpacing: Spacing = { x: 8, y: 8, top: 8, bottom: 8, left: 8, right: 8 };
@@ -419,12 +431,27 @@ const CardWindowRender = <T extends any[]>(
   useIsomorphicLayoutEffect(() => {
     const el = scrollerRef.current;
     if (!el) return undefined;
+    let previous: { viewHeight: number; sizerHeight: number } | null = null;
+    let warned = false;
     const observer = new ResizeObserver((entries) => {
       const viewHeight = entries[0].contentRect.height;
       const cols = readColumnCount(gridRef.current);
       // Layout is clean when the callback runs, so reading offsetHeight costs no extra layout.
       const sizerHeight = sizerRef.current?.offsetHeight ?? 0;
       const followsContent = Math.abs(viewHeight - sizerHeight) < 1;
+      // CardWindow's own render changed the sizer and the root followed. This excludes the 0 = 0 observation at mount
+      // and a sized frame whose content is exactly as tall. A maxHeight is the intended way to bound such a root.
+      const resizedByOwnRender =
+        previous !== null && viewHeight !== previous.viewHeight && sizerHeight !== previous.sizerHeight;
+      previous = { viewHeight, sizerHeight };
+      if (dev && !warned && followsContent && resizedByOwnRender && getComputedStyle(el).maxHeight === 'none') {
+        warned = true;
+        console.warn(
+          'card-window: The element around CardWindow has no height, so CardWindow grows with its cards and ' +
+            'renders all of them. While data grows, loading.loadMore keeps being called. Give that element a ' +
+            'height, or set root.style.height or root.style.maxHeight.',
+        );
+      }
       const update = () =>
         setMeasure((prev) =>
           prev && prev.viewHeight === viewHeight && prev.cols === cols ? prev : { viewHeight, cols },
@@ -591,6 +618,9 @@ const CardWindowRender = <T extends any[]>(
 /**
  * Renders the cards of `data` that fall in the rows filling its scroll container, plus `overScanPx` above and below.
  * The `ref` receives the scroll container element.
+ *
+ * The element around CardWindow needs a height, because CardWindow fills it and scrolls inside it. Without one,
+ * CardWindow renders every card, and a development build warns once.
  */
 const CardWindow = React.forwardRef(CardWindowRender) as <T extends any[] = any[]>(
   props: CardWindowProps<T> & React.RefAttributes<HTMLDivElement>,

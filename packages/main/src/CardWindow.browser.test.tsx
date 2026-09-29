@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
 
 import { CardProps, CardWindow, CardWindowProps, JustifyContent, Loading, OnScrollProps, range } from '.';
@@ -576,6 +576,12 @@ describe('horizontal overflow', () => {
 });
 
 describe('frame without a height', () => {
+  // These tests cover the loop error. The no-height warning has its own tests.
+  beforeEach(() => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    return () => warn.mockRestore();
+  });
+
   // The root grows with its content, so all 100 cards render. When the root's
   // height equals the sizer's, CardWindow renders outside the resize callback,
   // so the observed box does not change during the callback.
@@ -642,4 +648,57 @@ describe('frame without a height', () => {
       observer.disconnect();
     }
   });
+});
+
+describe('no-height warning', () => {
+  test('warns once when the frame has no height', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { frame } = await renderInFrame({ width: 400 }, { data: range(100) });
+      await expect.poll(() => warn.mock.calls.length).toBe(1);
+      expect(warn.mock.calls[0][0]).toMatch(/^card-window:/);
+      frame.style.width = '600px';
+      await nextFrames();
+      await nextFrames();
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test('warns when the frame has only a min-height', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await renderInFrame({ width: 400, minHeight: 330 }, { data: range(100) });
+      await expect.poll(() => warn.mock.calls.length).toBe(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test.each([
+    ['a frame with a height', { width: 400, height: 330 }, { data: range(100) }],
+    ['a frame 0px tall', { width: 400, height: 0 }, { data: range(100) }],
+    ['a root with a max-height', { width: 400 }, { data: range(100), root: { style: { maxHeight: 330 } } }],
+    [
+      'a short list in a root with a max-height',
+      { width: 400 },
+      { data: range(5), root: { style: { maxHeight: 330 } } },
+    ],
+  ] satisfies [string, React.CSSProperties, Props][])('does not warn for %s', (_, frameStyle, props) =>
+    withWindowErrors(async (errors) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const { scroller } = await renderInFrame(frameStyle, props);
+        await expect.poll(() => cards(scroller).length).toBeGreaterThan(0);
+        await nextFrames();
+        await nextFrames();
+        await nextFrames();
+        expect(warn).not.toHaveBeenCalled();
+        expect(errors).toEqual([]);
+      } finally {
+        warn.mockRestore();
+      }
+    }),
+  );
 });
