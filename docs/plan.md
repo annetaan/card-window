@@ -546,6 +546,7 @@ Decided for the known limitations on 2026-09-29.
   - `container.style` no longer accepts `overflow` or `overflowX`. Passing either is now a type error.
   - A frame without a height, or a root with `root.style.maxHeight`, no longer reports "ResizeObserver loop completed with undelivered notifications". A root with `root.style.minHeight` and no height reports it only once, on mount.
   - Development builds warn once when the frame has no height.
+- The release is 2.2.0, a minor, because of the `minWidth` removal and the narrower `container.style` type. The 2.2.0 release PR bumps `version` and adds the height paragraph under Usage in both READMEs. The GitHub Release body comes from the "What changes for consumers" section of #87.
 
 ## Open questions
 
