@@ -6,7 +6,7 @@
 - `pnpm build`: builds card-window.
 - `pnpm test`: runs the unit tests with Vitest in jsdom.
 - `pnpm test:browser`: runs the browser tests with Vitest Browser Mode in headless Chromium through Playwright. It launches Chromium without `--hide-scrollbars`, so a test that styles `::-webkit-scrollbar` gets a visible classic scrollbar on macOS as it does on Linux.
-- `pnpm bench`: builds the page in `packages/main/bench` with Vite and measures mounting, scrolling and resizing in headless Chromium at 4x CPU throttling. It prints a Markdown table of medians over 5 runs, and `--runs=N` changes the count.
+- `pnpm bench`: builds the page in `packages/main/bench` with Vite and measures mounting, scrolling by setting `scrollTop`, scrolling by wheel input and resizing in headless Chromium at 4x CPU throttling. It prints a Markdown table of medians over 5 runs, and `--runs=N` changes the count.
 - `pnpm coverage`: runs the unit tests with a coverage report.
 - `pnpm typecheck`: type-checks `src`, test files included, with `tsc`. This also runs the type tests in `src/*.test-d.tsx`.
 - `pnpm lint`: lints `packages/main` and `packages/website` with oxlint.
