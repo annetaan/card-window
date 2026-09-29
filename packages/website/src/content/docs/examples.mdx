@@ -63,7 +63,6 @@ A card component typed as `CardProps<T>` for a `T` that `data` does not fit is a
 By default, `root.style` has these values:
 
 - `width`: `100%`
-- `minWidth`: `cardRect.width`
 - `height`: `100%`
 - `scrollbarGutter`: `stable`
 
@@ -76,7 +75,9 @@ By default, `root.style` has these values:
 ### `container`
 
 `container` is passed to the element inside the scroll container that holds the grid and sets the scroll height.
-`container.style` cannot override `width`, `height`, `paddingLeft`, `paddingRight`, `boxSizing` and `position`.
+`container.style` cannot override `width`, `height`, `paddingLeft`, `paddingRight`, `boxSizing`, `position` and `overflowX`.
+`overflowX` is `clip`, so a card or loading card wider than its column is cut at the sides, and the root never scrolls sideways.
+The type of `container.style` leaves out `overflow` and `overflowX`.
 
 <Example code={containerStyleSource} title="ContainerStyle.tsx">
   <ContainerStyle client:load />

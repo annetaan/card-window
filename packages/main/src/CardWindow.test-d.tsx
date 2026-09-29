@@ -144,6 +144,21 @@ describe('CardWindow types', () => {
     </CardWindow>;
   });
 
+  test('rejects overflow in container.style', () => {
+    const hidden: CardWindowProps['container'] = {
+      // @ts-expect-error CardWindow sets overflowX on the container
+      style: { overflow: 'hidden' },
+    };
+    const scrollX: CardWindowProps['container'] = {
+      // @ts-expect-error CardWindow sets overflowX on the container
+      style: { overflowX: 'auto' },
+    };
+    const other: CardWindowProps['container'] = { style: { background: 'red', maxWidth: 300 } };
+    void hidden;
+    void scrollX;
+    void other;
+  });
+
   test('works where a component type is expected', () => {
     const component: React.ComponentType<CardWindowProps & React.RefAttributes<HTMLDivElement>> = CardWindow;
     void component;

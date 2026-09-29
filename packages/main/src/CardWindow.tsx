@@ -112,7 +112,10 @@ export type CardWindowProps<T extends any[] = any[]> = {
   /** `data` is an array. CardWindow passes data to `CardWindow.children` component. */
   data: T;
 
-  /** `cardRect` is used to calculate the rendering of `CardWindow.children` component. */
+  /**
+   * `cardRect` is used to calculate the rendering of `CardWindow.children` component.
+   * A card or loading card wider than `cardRect.width` is clipped at the sides of the scroll container.
+   */
   cardRect: Rect;
 
   /** `children` is a component that receives `CardProps<T>`. */
@@ -140,8 +143,11 @@ export type CardWindowProps<T extends any[] = any[]> = {
   container?: {
     /** `container.className` are passed to the scrollable large container element. */
     className?: string;
-    /** `container.style` are passed to the scrollable large container element. */
-    style?: Omit<CSSProperties, 'width' | 'height'>;
+    /**
+     * `container.style` are passed to the scrollable large container element.
+     * CardWindow sets `overflowX` to `clip`, so a card wider than its column never makes the root scroll sideways.
+     */
+    style?: Omit<CSSProperties, 'width' | 'height' | 'overflow' | 'overflowX'>;
   };
 
   /**
@@ -298,6 +304,18 @@ const Item = React.memo(({ Children, data, index, row, col }: ItemProps) => (
   <Children data={data} index={index} style={cardStyle} row={row} col={col} />
 ));
 
+// Bundlers and Vitest replace `process.env.NODE_ENV` as text. A `typeof process` guard would turn the warning off
+// under Vite, where `process` does not exist at runtime. The `try` covers loading the module without a bundler.
+// `src` has no Node types, so `process` is declared here by hand.
+declare const process: { env: { NODE_ENV?: string } };
+const dev = (() => {
+  try {
+    return process.env.NODE_ENV !== 'production';
+  } catch {
+    return false;
+  }
+})();
+
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 const defaultSpacing: Spacing = { x: 8, y: 8, top: 8, bottom: 8, left: 8, right: 8 };
@@ -314,6 +332,12 @@ type Latest = {
   thresholdOfVisible: number;
   onScroll: ((props: OnScrollProps) => void) | undefined;
   loadMore: (() => void) | undefined;
+};
+
+// A max-height or min-height on the root can let its height follow the sizer's between the two limits.
+const boundedByOwnHeight = (el: HTMLElement) => {
+  const { maxHeight, minHeight } = getComputedStyle(el);
+  return maxHeight !== 'none' || (minHeight !== 'auto' && minHeight !== '0px');
 };
 
 const sameRange = (a: [number, number], b: [number, number]) => a[0] === b[0] && a[1] === b[1];
@@ -342,6 +366,7 @@ const CardWindowRender = <T extends any[]>(
   const scrollerRef = useRef<HTMLDivElement>(null);
   useImperativeHandle(parentRef, () => scrollerRef.current as HTMLDivElement, []);
   const gridRef = useRef<HTMLDivElement>(null);
+  const sizerRef = useRef<HTMLDivElement>(null);
   const [measure, setMeasure] = useState<{ viewHeight: number; cols: number } | null>(null);
   const [offset, setOffset] = useState(0);
   const cols = measure?.cols ?? 0;
@@ -353,7 +378,6 @@ const CardWindowRender = <T extends any[]>(
   // first render inside the ResizeObserver callback does not resize what that callback observes.
   const rootStyle: CSSProperties = {
     width: '100%',
-    minWidth: card.width,
     height: '100%',
     scrollbarGutter: 'stable',
     ...root.style,
@@ -368,6 +392,10 @@ const CardWindowRender = <T extends any[]>(
     // The containing block of the sentinel.
     position: 'relative',
     height: scrollContainerHeight,
+    // Content wider than its column would make the root scroll sideways. A classic horizontal scrollbar that
+    // appears during the render inside the ResizeObserver callback resizes the observed box. Unlike hidden, clip
+    // does not make the sizer a scroll container, so focus cannot shift the grid sideways.
+    overflowX: 'clip',
   };
   const rows = getRenderRange(offset, viewHeight, overScanPx, rowCount, card, spacing);
   // A loading row taller than the reach leaves the range empty past the last card row. The loading row follows
@@ -394,18 +422,50 @@ const CardWindowRender = <T extends any[]>(
     justifyContent: justify,
   };
 
+  // The column count of the last commit, which sets the sizer's height. The ResizeObserver callback reads it, and
+  // the layout effect that keeps the first visible card in view writes it.
+  const prevColsRef = useRef(0);
+
   // The first observation arrives before the first paint, and flushSync renders the cards before that paint too.
+  // The exception is a column count change in a root whose height can follow its content. A new column count
+  // changes the sizer's height, so rendering inside the callback would resize the box it observes and fire
+  // "ResizeObserver loop completed with undelivered notifications". A plain state update renders after the
+  // callback instead. Such a root is either as tall as the sizer (no frame height, or a maxHeight not yet reached,
+  // or 0px tall) or held by its own max-height or min-height, which the new sizer height may cross. At mount the
+  // first kind is 0px tall, so no cards are lost there. The second kind still renders inside the callback at mount,
+  // or its first paint would show no cards. A sized frame whose root sets either limit pays one stale frame here.
   useIsomorphicLayoutEffect(() => {
     const el = scrollerRef.current;
     if (!el) return undefined;
+    let previous: { viewHeight: number; sizerHeight: number } | null = null;
+    let warned = false;
     const observer = new ResizeObserver((entries) => {
       const viewHeight = entries[0].contentRect.height;
       const cols = readColumnCount(gridRef.current);
-      flushSync(() =>
+      // Layout is clean when the callback runs, so reading offsetHeight costs no extra layout.
+      const sizerHeight = sizerRef.current?.offsetHeight ?? 0;
+      const followsContent = Math.abs(viewHeight - sizerHeight) < 1;
+      // CardWindow's own render changed the sizer and the root followed. This excludes the 0 = 0 observation at mount
+      // and a sized frame whose content is exactly as tall. A maxHeight is the intended way to bound such a root.
+      const resizedByOwnRender =
+        previous !== null && viewHeight !== previous.viewHeight && sizerHeight !== previous.sizerHeight;
+      previous = { viewHeight, sizerHeight };
+      if (dev && !warned && followsContent && resizedByOwnRender && getComputedStyle(el).maxHeight === 'none') {
+        warned = true;
+        console.warn(
+          'card-window: The element around CardWindow has no height, so CardWindow grows with its cards and ' +
+            'renders all of them. While data grows, loading.loadMore keeps being called. Give that element a ' +
+            'height, or set root.style.height or root.style.maxHeight.',
+        );
+      }
+      const update = () =>
         setMeasure((prev) =>
           prev && prev.viewHeight === viewHeight && prev.cols === cols ? prev : { viewHeight, cols },
-        ),
-      );
+        );
+      // Only a new column count changes the sizer's height. More rows in a taller view leave it as it is.
+      const committedCols = prevColsRef.current;
+      if (cols !== committedCols && (followsContent || (committedCols !== 0 && boundedByOwnHeight(el)))) update();
+      else flushSync(update);
     });
     observer.observe(el);
     return () => observer.disconnect();
@@ -417,7 +477,6 @@ const CardWindowRender = <T extends any[]>(
   // Keep the first visible card in view when the column count changes. The live scrollTop may already be
   // clamped to the shorter sizer of this commit, so start from the last position the scroll handler saw.
   // Its rAF callback runs before the ResizeObserver callback in a frame, so no scroll is missed.
-  const prevColsRef = useRef(0);
   useIsomorphicLayoutEffect(() => {
     const prev = prevColsRef.current;
     prevColsRef.current = cols;
@@ -519,7 +578,7 @@ const CardWindowRender = <T extends any[]>(
 
   return (
     <div ref={scrollerRef} className={root.className} style={rootStyle}>
-      <div className={container.className} style={scrollContainerStyle}>
+      <div ref={sizerRef} className={container.className} style={scrollContainerStyle}>
         <div style={windowStyle}>
           <div ref={gridRef} style={gridStyle}>
             {range(start, stop).map((i) =>
@@ -565,6 +624,9 @@ const CardWindowRender = <T extends any[]>(
 /**
  * Renders the cards of `data` that fall in the rows filling its scroll container, plus `overScanPx` above and below.
  * The `ref` receives the scroll container element.
+ *
+ * The element around CardWindow needs a height, because CardWindow fills it and scrolls inside it. Without one,
+ * CardWindow renders every card, and a development build warns once.
  */
 const CardWindow = React.forwardRef(CardWindowRender) as <T extends any[] = any[]>(
   props: CardWindowProps<T> & React.RefAttributes<HTMLDivElement>,
