@@ -72,6 +72,12 @@ const App: React.FC = () => {
 createRoot(document.getElementById('app')!).render(<App />);
 ```
 
+The element around `CardWindow` needs a height, like the `height: 400` in the example.
+CardWindow fills that element and scrolls inside it.
+Without a height, CardWindow grows with its cards and renders all of them.
+A development build then warns once in the console.
+To let a short list shrink and still stop a long one, set `root.style.maxHeight`.
+
 ## Upgrading from 1.x
 
 2.0.0 changes the layout, the props and the requirements; see [Upgrading from 1.x](https://github.com/annetaan/card-window#upgrading-from-1x) in the README for what you may have to change.
