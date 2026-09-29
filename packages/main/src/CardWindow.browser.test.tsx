@@ -392,6 +392,105 @@ describe('container style', () => {
   });
 });
 
+describe('column count after a prop change', () => {
+  // A 600px frame with 100 cards of 100 x 100 gives 5 columns, 20 rows and a
+  // 2168px sizer (8 + 20 * 108 - 8 + 8). Each change leaves room for 2
+  // columns, 50 rows and 5408px. This holds with a 0px and a 15px gutter. The
+  // content is 584px or 569px wide before. After the change, 250px cards in
+  // 584 or 569 fit 2, spacing.x 200 in 584 or 569 fits 2, spacing.left 300
+  // leaves 292 or 277 and fits 2, and maxWidth 300 leaves 284 and fits 2.
+  //
+  // The check reads scrollHeight, not the column count on screen. CSS
+  // auto-fill draws the new columns even when CardWindow keeps a stale count,
+  // but only the count CardWindow keeps sets the sizer's height.
+  type Change = Partial<Pick<CardWindowProps, 'cardRect' | 'spacing' | 'container'>>;
+
+  test.each([
+    ['cardRect.width', { cardRect: { width: 250, height: 100 } }],
+    ['spacing.x', { spacing: { x: 200 } }],
+    ['spacing.left', { spacing: { left: 300 } }],
+    ['container.style', { container: { style: { maxWidth: 300 } } }],
+    ['container.className', { container: { className: 'narrow-sizer' } }],
+  ] satisfies [string, Change][])('follows %s', async (_, change: Change) => {
+    const style = document.createElement('style');
+    style.textContent = '.narrow-sizer { max-width: 300px; }';
+    document.head.appendChild(style);
+    try {
+      const app = (change: Change) => (
+        <div data-testid="frame" style={{ width: 600, height: 300 }}>
+          <CardWindow cardRect={cardRect} data={range(100)} {...change}>
+            {Card}
+          </CardWindow>
+        </div>
+      );
+      const screen = await render(app({}));
+      const frame = screen.container.querySelector('[data-testid="frame"]') as HTMLElement;
+      const scroller = frame.firstElementChild as HTMLElement;
+      await expect.poll(() => scroller.scrollHeight).toBe(2168);
+      await screen.rerender(app(change));
+      await expect.poll(() => scroller.scrollHeight).toBe(5408);
+    } finally {
+      style.remove();
+    }
+  });
+});
+
+describe('render range after a prop change', () => {
+  // The offsets sit away from every threshold. 1396 is 8px from both nearby
+  // thresholds, and 1450 is 44px or more from its own. With 200px of overscan
+  // the first row is 11 for any scrollTop from 1388 up to 1496, so the scroll
+  // from 1396 to 1450 does not change the range, and the range stays the one
+  // taken at 1396. With no overscan the range from 1396 is rows 12 to 15. The
+  // view at 1450 reaches 1780, and row 16 (cards 48 to 50) starts at 1736, so
+  // card 48 must render right after the rerender.
+  test('follows a smaller overScanPx while scrolled', async () => {
+    const app = (overScanPx: number) => (
+      <div data-testid="frame" style={{ width: 400, height: 330 }}>
+        <CardWindow cardRect={cardRect} data={range(300)} overScanPx={overScanPx}>
+          {Card}
+        </CardWindow>
+      </div>
+    );
+    const screen = await render(app(200));
+    const frame = screen.container.querySelector('[data-testid="frame"]') as HTMLElement;
+    const scroller = frame.firstElementChild as HTMLElement;
+    await expect.poll(() => columnCount(scroller)).toBe(3);
+    scroller.scrollTop = 1396;
+    await nextFrames();
+    await nextFrames();
+    scroller.scrollTop = 1450;
+    await nextFrames();
+    await nextFrames();
+    await screen.rerender(app(0));
+    expect(indexesInView(scroller)).toContain(48);
+    await nextFrames();
+    await nextFrames();
+    expect(indexesInView(scroller)).toContain(48);
+  });
+});
+
+describe('data shrink', () => {
+  // The browser clamps scrollTop to the shorter sizer. The range must follow
+  // the clamp in the same commit, before any scroll event.
+  test('shows the last cards right after data shrinks at the end', async () => {
+    const app = (length: number) => (
+      <div data-testid="frame" style={{ width: 400, height: 330 }}>
+        <CardWindow cardRect={cardRect} data={range(length)}>
+          {Card}
+        </CardWindow>
+      </div>
+    );
+    const screen = await render(app(300));
+    const frame = screen.container.querySelector('[data-testid="frame"]') as HTMLElement;
+    const scroller = frame.firstElementChild as HTMLElement;
+    await expect.poll(() => columnCount(scroller)).toBe(3);
+    scroller.scrollTop = scroller.scrollHeight;
+    await expect.poll(() => indexesInView(scroller)).toContain(299);
+    await screen.rerender(app(150));
+    expect(indexesInView(scroller)).toContain(149);
+  });
+});
+
 describe('resize without loop errors', () => {
   // A visible 15px classic scrollbar, as in the classic scrollbar tests. At
   // 600px the content is 600 - 15 - 16 = 569px, which fits 5 columns.
