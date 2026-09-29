@@ -514,7 +514,13 @@ const CardWindowRender = <T extends any[]>(
   // measure also covers viewHeight and cols.
   // A commit that only moved the offset, as every scroll commit does, reads nothing from the layout.
   // Lint does not check this list, because react/exhaustive-deps does not know useIsomorphicLayoutEffect. The browser
-  // tests `column count after a prop change`, `render range after a prop change` and `data shrink` pin it.
+  // tests `column count after a prop change` and `render range after a prop change` fail without any one of
+  // card.width, spacing.x, spacing.left, container.style, container.className or overScanPx. `data shrink` fails
+  // only without both rowCount and scrollContainerHeight, because a length change moves both. No test fails on one
+  // of the rest. Some cannot. justify leaves the auto-fill column count the same. card.height, spacing.y and
+  // spacing.top each also change scrollContainerHeight. A column change moves rowCount too, so measure alone
+  // matters only when the view height changes. A test could still cover that, spacing.right, and spacing.bottom
+  // or a `type: 'row'` loading, which only scrollContainerHeight carries.
   useIsomorphicLayoutEffect(() => {
     // Only the scroll container is observed, so a sizer narrowed by CardWindow's own props shows up here,
     // after the commit that narrowed it. Observing the sizer would risk a ResizeObserver loop.
