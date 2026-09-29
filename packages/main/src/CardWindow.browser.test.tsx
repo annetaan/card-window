@@ -535,7 +535,7 @@ describe('horizontal overflow', () => {
   // make the root scroll sideways. With a classic scrollbar a horizontal one
   // would take 15px of height and resize the observed box, which fires
   // "ResizeObserver loop completed with undelivered notifications".
-  test.fails.each([
+  test.each([
     ['a card wider than its column', 400, { data: range(100), justifyContent: 'left' }, WideCard],
     [
       'a loading card wider than its column',
@@ -567,6 +567,12 @@ describe('horizontal overflow', () => {
         expect(scroller.offsetHeight - scroller.clientHeight).toBe(0);
       }),
   );
+
+  test('a frame narrower than one card keeps the root inside the frame', async () => {
+    const { scroller } = await renderCardWindow(80, 330, { data: range(100) });
+    await expect.poll(() => columnCount(scroller)).toBe(1);
+    expect(scroller.offsetWidth).toBe(80);
+  });
 });
 
 describe('frame without a height', () => {

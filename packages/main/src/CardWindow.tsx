@@ -112,7 +112,10 @@ export type CardWindowProps<T extends any[] = any[]> = {
   /** `data` is an array. CardWindow passes data to `CardWindow.children` component. */
   data: T;
 
-  /** `cardRect` is used to calculate the rendering of `CardWindow.children` component. */
+  /**
+   * `cardRect` is used to calculate the rendering of `CardWindow.children` component.
+   * A card or loading card wider than `cardRect.width` is clipped at the sides of the scroll container.
+   */
   cardRect: Rect;
 
   /** `children` is a component that receives `CardProps<T>`. */
@@ -140,8 +143,11 @@ export type CardWindowProps<T extends any[] = any[]> = {
   container?: {
     /** `container.className` are passed to the scrollable large container element. */
     className?: string;
-    /** `container.style` are passed to the scrollable large container element. */
-    style?: Omit<CSSProperties, 'width' | 'height'>;
+    /**
+     * `container.style` are passed to the scrollable large container element.
+     * CardWindow sets `overflowX` to `clip`, so a card wider than its column never makes the root scroll sideways.
+     */
+    style?: Omit<CSSProperties, 'width' | 'height' | 'overflow' | 'overflowX'>;
   };
 
   /**
@@ -353,7 +359,6 @@ const CardWindowRender = <T extends any[]>(
   // first render inside the ResizeObserver callback does not resize what that callback observes.
   const rootStyle: CSSProperties = {
     width: '100%',
-    minWidth: card.width,
     height: '100%',
     scrollbarGutter: 'stable',
     ...root.style,
@@ -368,6 +373,10 @@ const CardWindowRender = <T extends any[]>(
     // The containing block of the sentinel.
     position: 'relative',
     height: scrollContainerHeight,
+    // Content wider than its column would make the root scroll sideways. A classic horizontal scrollbar that
+    // appears during the render inside the ResizeObserver callback resizes the observed box. Unlike hidden, clip
+    // does not make the sizer a scroll container, so focus cannot shift the grid sideways.
+    overflowX: 'clip',
   };
   const rows = getRenderRange(offset, viewHeight, overScanPx, rowCount, card, spacing);
   // A loading row taller than the reach leaves the range empty past the last card row. The loading row follows
