@@ -205,11 +205,11 @@ PRs: #74 browser tests.
 ### Where things stand
 
 - The DOM has four levels. The root is the scroll container. It sets `scrollbarGutter: 'stable'` before the `root.style` spread. Inside it is the sizer, with `container.className`, `boxSizing: 'border-box'`, `position: 'relative'` and an explicit height. Inside the sizer is the window, moved down with `translateY`. Inside the window is the grid. Its tracks are `repeat(auto-fill, <width>px)`, or `repeat(auto-fill, minmax(<width>px, 1fr))` for `stretch`, with `gridAutoRows`, the gaps and `justify-content`. The loading row is the grid's next sibling. A 1px sentinel sits absolutely positioned at the bottom of the sizer.
-- The column count is read back from the resolved `grid-template-columns` in `readColumnCount`. There is no column formula in JavaScript. The count is read in two places. One is the callback of the only `ResizeObserver`, which observes the scroll container and updates state through `flushSync`. The other is the layout effect after every commit.
-- Scroll uses a passive listener and one `requestAnimationFrame` per frame. State is set only when the render range changes. `getRenderRange` keys that range on its first row. It spans `ceil((viewHeight + 2 × overScanPx + cardHeight) / pitch)` rows, so it changes only when its first row changes. `getRowRange` still gives the exact rows for `indexesOfVisible`. A `latest` ref is written after each commit, and the range is checked again against the live `scrollTop` after each commit too.
+- The column count is read back from the resolved `grid-template-columns` in `readColumnCount`. There is no column formula in JavaScript. The count is read in two places. One is the callback of the only `ResizeObserver`, which observes the scroll container and updates state through `flushSync`. The other is a layout effect that runs only after a commit that changes one of its inputs, so a scroll commit does not read the count. See "Layout reads in the scroll scenarios".
+- Scroll uses a passive listener and one `requestAnimationFrame` per frame. State is set only when the render range changes. `getRenderRange` keys that range on its first row. It spans `ceil((viewHeight + 2 × overScanPx + cardHeight) / pitch)` rows, so it changes only when its first row changes. `getRowRange` still gives the exact rows for `indexesOfVisible`. A `latest` ref is written after each commit. The scroll handler also writes the range it requests into `latest.rows`. The range is checked against the live `scrollTop` in the same gated effect as the column count. It runs after a commit that changes the view height, the row count, the sizer height, the overscan, or the card height and spacing.
 - Cards render through a module-level `React.memo` item and share one empty `style` object. Loading cards follow them in the grid.
 - `loadMore` is called from an `IntersectionObserver` on the sentinel, with `rootMargin: <overScanPx>px 0px`. The observer is recreated when `data.length` changes.
-- `pnpm bench` runs the benchmark in `packages/main/bench/`. It mounts a 1000×800 frame with 10,000 cards of 200×120, scrolls 600 frames by 40px, does the same with a no-op `onScroll`, and resizes the frame from 1000px to 500px and back in 10px steps. For each scenario it reports CPU time in script, layout and style, the layout and style recalc counts, card renders, DOM nodes, commits and the p95 frame interval. Commits is the number of tasks that changed the DOM during the scenario, counted with a `MutationObserver` on the frame. Chained commits in one task count once.
+- `pnpm bench` runs the benchmark in `packages/main/bench/`. It mounts a 1000×800 frame with 10,000 cards of 200×120, scrolls 600 frames by 40px, does the same with a no-op `onScroll`, resizes the frame from 1000px to 500px and back in 10px steps, and scrolls 24,000px with the wheel through a CDP scroll gesture. Every scenario runs as `start()`, a driver, then `finish()`. The three scroll scenarios fail unless they reach the full 24,000px. For each scenario it reports CPU time in script, layout and style, the layout and style recalc counts, card renders, DOM nodes, commits and the p95 frame interval. Commits is the number of tasks that changed the DOM during the scenario, counted with a `MutationObserver` on the frame. Chained commits in one task count once.
 
 ### What changes for consumers
 
@@ -289,7 +289,7 @@ Durations are the median of the 3 invocation medians, with the min to max range 
 | resize | before | 21.2 (19.5–24.2) | 3.7 (3.6–3.8) | 0.8 (0.7–0.8) | 49.9 (49.0–56.8) | 16.7 (16.7–16.8) |
 | resize | after | 7.5 (7.2–8.0) | 3.6 (3.6–4.3) | 0.5 (0.4–1.0) | 37.4 (33.4–38.2) | 16.7 (16.7–16.8) |
 
-Card renders fell to a tenth in the scroll scenarios, from 7400 to 740. Resize renders 122 cards where 1.11.0 rendered 2400, and the mount 44 where it rendered 64. The mount no longer renders every card twice. The window now holds 47 elements in every scenario, because it always keeps a full span. That is 6 more than 1.11.0 at the top of the list and 4 fewer while scrolling. Layouts and style recalcs in the scroll scenarios are 185, the same as 1.11.0, and there is one commit per row scrolled. The first measurement of `ea617c6` showed 336 here. That was traced and fixed, as the bullet on the render range above describes. Task time fell in the scroll scenarios, from 239.1ms to 174.9ms and from 210.9ms to 188.6ms, and in resize from 49.9ms to 37.4ms. Layout time in the scroll scenarios went up, from 22.2ms to 30.2ms and from 19.5ms to 35.2ms, for the same number of layouts. I do not know why each layout costs more. Apart from one invocation, durations move between invocations by up to 81ms of task time. That one, scroll-onscroll after in round 1, took 368.7ms, twice the other two. That is why the rounds alternated.
+Card renders fell to a tenth in the scroll scenarios, from 7400 to 740. Resize renders 122 cards where 1.11.0 rendered 2400, and the mount 44 where it rendered 64. The mount no longer renders every card twice. The window now holds 47 elements in every scenario, because it always keeps a full span. That is 6 more than 1.11.0 at the top of the list and 4 fewer while scrolling. Layouts and style recalcs in the scroll scenarios are 185, the same as 1.11.0, and there is one commit per row scrolled. The first measurement of `ea617c6` showed 336 here. That was traced and fixed, as the bullet on the render range above describes. Task time fell in the scroll scenarios, from 239.1ms to 174.9ms and from 210.9ms to 188.6ms, and in resize from 49.9ms to 37.4ms. Layout time in the scroll scenarios went up, from 22.2ms to 30.2ms and from 19.5ms to 35.2ms, for the same number of layouts. I do not know why each layout costs more. The cause was found and fixed after 2.2.0. See "Layout reads in the scroll scenarios". Apart from one invocation, durations move between invocations by up to 81ms of task time. That one, scroll-onscroll after in round 1, took 368.7ms, twice the other two. That is why the rounds alternated.
 
 ### Known limitations
 
@@ -407,6 +407,95 @@ michiharu merged #79 before the Pages switch, so the order changed a little.
 - `ci (18)`, `ci (19)` and the build job of `Docs` are green on the PR.
 - The push run on `main` deploys.
 - The site and the four redirects answer at annetaan.github.io.
+
+## Layout reads in the scroll scenarios (done)
+
+Phase 4 left one open question. Each layout in the scroll scenarios cost 1.4 to 1.8 times what it did in 1.11.0, for the same 185 layouts. This section traces it and records the fix.
+
+### What the trace showed
+
+I traced it on 2026-09-29, before any change. The probe ran Playwright's `browser.startTracing` with the categories `devtools.timeline`, `disabled-by-default-devtools.timeline` and `disabled-by-default-devtools.timeline.stack`, on an unminified build. Each Layout event's `beginData` gives the dirty and total objects, and for a forced layout the JS stack.
+
+1.11.0 and 2.2.0 do the same 185 layouts in the scroll scenario, with the same dirty counts, 17 of 97 objects. Every one of them is forced from JS. In 1.11.0 `handleScroll` forces it. In 2.2.0 `readColumnCount` forces it, in the layout effect that ran after every commit. That effect also read `scrollTop` again.
+
+The numbers below are Layout time from the trace. For each run I summed the `dur` of every Layout event, which is wall time inside the trace. Each cell is the median over 5 alternating rounds. There were two separate runs, and each has its own 1.11.0 and 2.2.0 baseline. Compare within a run only.
+
+Run 1:
+
+| Variant | Layout ms |
+| --- | --: |
+| 1.11.0 | 63.0 |
+| 2.2.0 | 74.4 |
+| 2.2.0 without both reads | 66.2 |
+| 2.2.0 with flex in place of grid | 70.8 |
+| 2.2.0 without the transform | 79.1 |
+
+Run 2:
+
+| Variant | Layout ms |
+| --- | --: |
+| 1.11.0 | 66.8 |
+| 2.2.0 | 80.9 |
+| 2.2.0 without the column read | 76.3 |
+| 2.2.0 without the `scrollTop` re-check | 78.1 |
+| 2.2.0 without both reads | 67.1 |
+
+In run 2, either read alone was enough to keep most of the cost. Only removing both brought it down to 1.11.0.
+
+In run 1 the gap to 1.11.0 was 11.4ms. Removing both reads took back 8.2ms of it. Flex in place of grid took back 3.6ms. So the reads are the main cause, and grid may account for a small part. I did not trace that part further. Dropping the transform made it worse, by 4.7ms.
+
+I checked the scrollbar gutter only with the CDP-metrics bench, which is noisier, in 3 rounds. Layout time without the gutter came to 1.51, 1.75 and 1.35 times 1.11.0. 2.2.0 with the gutter came to 1.55, 2.24 and 1.28 times. That shows no clear drop. It does not rule the gutter out either.
+
+With both reads removed, the forced layouts that remained came from the bench itself, from its `scrollTop += 40`. So the bench could not show compositor scrolling at all. That is why `wheel` was added.
+
+### What changed
+
+Three commits.
+
+- `93cf6f6` drives every bench scenario as `start()`, a driver, then `finish()`. The new `wheel` scenario scrolls 24,000px with the CDP method `Input.synthesizeScrollGesture`, from a mouse source at 2,400px/s, which is 40px per frame. `bench/scroll.mts` holds the distance. `scroll`, `scroll-onscroll` and `wheel` fail unless they reach it.
+- `3e5e1fb` adds 7 browser tests that pin what the reads are for. `column count after a prop change` has 5 cases. The other two are `render range after a prop change › follows a smaller overScanPx while scrolled` and `data shrink › shows the last cards right after data shrinks at the end`. They passed before the change. The column count on screen could not be the assertion. CSS draws the new columns even when CardWindow's stored count is stale. So the tests assert the sizer height through `scrollHeight`.
+- `235061f` splits the effect. The effect after every commit now only writes `latest`. A second layout effect holds both reads, unchanged, and runs only when one of 14 values changes. They come in two groups: what decides the grid's tracks and width, and what moves the range or the browser's clamp of `scrollTop`. A commit that only moved the offset reads nothing. `react/exhaustive-deps` does not check `useIsomorphicLayoutEffect`, so the tests from `3e5e1fb` pin the list. The scroll handler now writes the range it requests into `latest.rows`. A frame that runs before that commit compares against it. The re-check after every commit used to cover that case. The new test `layout reads while scrolling` counts `getComputedStyle` calls and `scrollTop` reads. On 2.2.0 it saw 8 and 44. After the change it sees 0, and at most 36 `scrollTop` reads for 36 frames. `pnpm test:browser` goes from 58 to 66 tests. `pnpm test` stays at 93.
+
+### Benchmark
+
+I ran `pnpm bench --runs=5` on three trees. 1.11.0 is `9932974` with `235061f`'s `bench/` copied in. Before is `93cf6f6`, and after is `235061f`. Each tree ran from a clean worktree. The trees alternated for 3 rounds in one session, in the order 1.11.0, before, after. They ran on Chromium 153.0.8010.12 and Node 24.14.0 at 4x CPU throttle, on an Apple M3 Mac with 16GB of memory. All nine headers named their commit without "(src modified)".
+
+Each cell reads 1.11.0 → before → after. Counts were the same in all 3 invocations of each tree.
+
+| Scenario | Layouts | Style recalcs | Commits | Card renders | DOM nodes |
+| --- | --: | --: | --: | --: | --: |
+| mount | 2 → 2 → 2 | 2 → 2 → 2 | 2 → 2 → 2 | 64 → 44 → 44 | 41 → 47 → 47 |
+| scroll | 185 → 185 → 185 | 185 → 185 → 185 | 185 → 185 → 185 | 7400 → 740 → 740 | 51 → 47 → 47 |
+| scroll-onscroll | 185 → 185 → 185 | 185 → 185 → 185 | 185 → 185 → 185 | 7400 → 740 → 740 | 51 → 47 → 47 |
+| resize | 103 → 103 → 103 | 103 → 103 → 103 | 104 → 104 → 104 | 2368 → 122 → 122 | 41 → 47 → 47 |
+| wheel | 185 → 185 → 185 | 185 → 185 → 185 | 185 → 185 → 185 | 7400 → 740 → 740 | 51 → 47 → 47 |
+
+Resize now shows 103 layouts and, for 1.11.0, 2368 card renders. Phase 4 showed 104 and 2400 with the old driver. I have not traced the difference.
+
+Durations are the median of the 3 invocation medians, with the min to max range across the 3 in brackets.
+
+| Scenario | | Script ms | Layout ms | Style ms | Task ms | p95 frame ms |
+| --- | --- | --: | --: | --: | --: | --: |
+| scroll | 1.11.0 | 64.7 (64.2–71.0) | 15.0 (12.6–16.3) | 4.9 (4.4–5.2) | 163.6 (158.7–170.3) | 16.7 (16.7–16.7) |
+| scroll | before | 44.8 (43.6–69.9) | 22.3 (21.0–37.9) | 5.7 (5.1–10.0) | 134.6 (132.4–197.5) | 16.7 (16.7–16.8) |
+| scroll | after | 44.3 (39.6–81.2) | 14.6 (14.5–28.1) | 4.8 (3.3–9.5) | 143.1 (123.6–237.7) | 16.7 (16.7–16.8) |
+| scroll-onscroll | 1.11.0 | 66.1 (57.2–71.0) | 14.1 (12.2–16.2) | 4.2 (4.0–5.7) | 160.1 (144.2–176.3) | 16.7 (16.7–16.8) |
+| scroll-onscroll | before | 48.6 (43.8–72.6) | 23.7 (22.5–37.5) | 6.3 (5.8–12.0) | 146.6 (131.0–202.1) | 16.7 (16.7–16.8) |
+| scroll-onscroll | after | 39.3 (38.3–49.2) | 13.5 (12.2–16.6) | 4.0 (3.9–5.6) | 122.4 (118.1–149.2) | 16.7 (16.7–16.8) |
+| wheel | 1.11.0 | 61.4 (59.9–72.6) | 16.4 (14.2–17.2) | 5.4 (5.1–5.8) | 166.7 (158.3–194.8) | 16.7 (16.7–16.8) |
+| wheel | before | 50.8 (47.7–93.9) | 24.0 (22.1–48.2) | 5.8 (5.3–16.1) | 157.1 (143.5–280.7) | 16.7 (16.7–16.7) |
+| wheel | after | 46.7 (44.1–51.0) | 16.5 (14.5–17.9) | 3.7 (3.5–4.5) | 141.8 (138.6–156.4) | 16.8 (16.7–16.8) |
+
+Layout time in the three scroll scenarios fell by 31% to 43%. scroll went from 22.3ms to 14.6ms, scroll-onscroll from 23.7ms to 13.5ms and wheel from 24.0ms to 16.5ms, drops of 35%, 43% and 31%. After the change each one sits within 1ms of 1.11.0, at 15.0ms, 14.1ms and 16.4ms. The layout count did not move. Each layout just costs what it did in 1.11.0 again. Task time fell in scroll-onscroll and wheel, from 146.6ms to 122.4ms and from 157.1ms to 141.8ms. In scroll it rose from 134.6ms to 143.1ms, inside the spread of both trees.
+
+Mount did not move outside its invocation ranges. In resize, Task time after is 32.3ms (32.2–33.1), just under the 33.9ms minimum before (33.9–38.6). Its other columns overlap.
+
+Round 1 stands out. Before in round 1 took 37.9ms, 37.5ms and 48.2ms of Layout time in the three scroll scenarios, against 21.0ms to 24.0ms in rounds 2 and 3. Its wheel run took 280.7ms of Task time. After in round 1 took 28.1ms of Layout time and 237.7ms of Task time in scroll, where the other two rounds took about 14.5ms and 123.6ms to 143.1ms. 1.11.0 in round 1 was the slowest of its three in every scroll scenario too. A median of 3 invocations leaves one slow invocation out.
+
+Two findings from the design work, measured outside this bench:
+
+- Under `wheel` the same 185 layouts are still forced after the change. They come from the scroll handler's own `el.scrollTop` read in `requestAnimationFrame`. The commit runs in a task after the paint and leaves the layout dirty for the next frame. That forced layout is the frame's only one, so it costs the same as an unforced one would.
+- A variant that committed inside the `requestAnimationFrame` callback with `flushSync` had 0 forced layouts. Its Layout time rose back to 46.7ms, 51.4ms and 47.2ms. The chosen change took 33.8ms, 28.8ms and 31.4ms, and 2.2.0 took 45.0ms, 52.7ms and 53.1ms. These come from the tracing probe on unminified builds, in 3 alternating rounds. So the scroll handler still commits as before.
 
 ## Decisions
 
@@ -560,9 +649,16 @@ Decided after 2.2.0 on 2026-09-29.
 - The repository keeps one README, at the root. `prepack` in `packages/main` copies it into the package before the build, and `packages/main/.gitignore` ignores the copy. `npm pack --dry-run` lists the 6.1kB README. The npm page now shows the same centred heading as GitHub. This replaces the 2.0.0 decision that the two READMEs stay identical apart from the first line. A change to the README no longer has to be made twice.
 - Issues #43, #58 and #60 are closed. #79 rebuilt the docs site, #64 to #72 replaced the toolchain, and the pnpm workspace from #64 covers what turborepo was meant for. #26, the logo, stays open.
 
+Decided for the layout reads on 2026-09-29.
+
+- The column read and the range re-check stay in one layout effect, gated by 14 dependencies. Its comment splits them into two groups. The design review offered two effects, one per read. michiharu chose one. One effect keeps today's order, where a changed column count returns before `scrollTop` is read.
+- `layout reads while scrolling` counts calls to DOM APIs. The header of `CardWindow.browser.test.tsx` names it as the one deliberate guard on the implementation. This amends the phase 3 contract that the browser tests assert behaviour only. michiharu's decision. CI does not run the bench, so nothing else would catch the reads coming back.
+- `wheel` uses `Input.synthesizeScrollGesture`, not `page.mouse.wheel`. A `mouse.wheel` loop needed a round trip to Node per step. It took 20.9s against 10.6s and added about 60ms of Script time. The CDP method is experimental. Playwright pins its Chromium, though, and the `scrollDistance` check makes a break loud.
+- The bench and the fix went in one PR with four commits. 1.11.0 was measured as `9932974` with the new `bench/` copied in.
+
 ## Open questions
 
-- Each layout in the scroll scenarios costs 1.4 to 1.8 times what it did in 1.11.0, for the same 185 layouts. Not traced.
+None.
 
 ## Working conventions
 
